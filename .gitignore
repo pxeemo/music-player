@@ -1,0 +1,15 @@
+# Build output
+/build/
+
+# CMake may regenerate this at the project root for tools that only look there;
+# the real file lives in build/ (see .clangd).
+compile_commands.json
+
+# QML cache
+.qmlcache/
+*.qmlc
+
+# Editor / IDE
+.cache/
+.idea/
+.vscode/

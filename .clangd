@@ -1,0 +1,14 @@
+# clangd configuration.
+#
+# CMake writes the compilation database to build/compile_commands.json, but
+# clangd only looks in the project root by default - this points at it.
+CompileFlags:
+  CompilationDatabase: build
+  # GCC-only flag from CMake; clangd doesn't know it and flags it as an error.
+  Remove: [-mno-direct-extern-access]
+
+Diagnostics:
+  # Qt macros (signals/slots/QML_ELEMENT) expand to unusual constructs; don't
+  # drown real errors in those false positives.
+  Suppress:
+    - unused-function
