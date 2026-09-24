@@ -125,5 +125,10 @@ signals:
     void linesChanged();
 
 private:
+    /// Emits linesChanged(), unless a bulk load is in progress - see
+    /// loadDemoLyrics().
+    void notifyLinesChanged();
+
     QList<LyricLine *> m_lines;
+    bool m_bulkLoading = false;
 };

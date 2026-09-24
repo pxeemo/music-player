@@ -19,8 +19,7 @@ Item {
 
     // ---- appearance (all adjustable from QML) ----------------------------
     property color baseColor: "#9b9ba4"      // not sung yet
-    property color sungColorA: "#ffffff"     // sung, at the left end of the line
-    property color sungColorB: "#ff4d92"     // sung, at the right end of the line
+    property color sungColorA: "#ffffff"     // the part that has been sung
     property color glowColor: "#ffd9ec"      // bright band at the playhead
     property real edge: 0.03                 // soft boundary, in line widths
     property real glow: 0.55                 // strength of the bright band
@@ -104,7 +103,6 @@ Item {
         property real glow: root.glow
         property color baseColor: root.baseColor
         property color sungColorA: root.sungColorA
-        property color sungColorB: root.sungColorB
         property color glowColor: root.glowColor
         property var source: textTexture
 

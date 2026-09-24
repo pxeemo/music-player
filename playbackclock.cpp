@@ -1,7 +1,5 @@
 #include "playbackclock.h"
 
-#include <QtMath>
-
 PlaybackClock::PlaybackClock(QObject *parent)
     : QObject(parent)
 {

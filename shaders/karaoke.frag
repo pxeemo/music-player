@@ -15,8 +15,7 @@ layout(std140, binding = 0) uniform buf {
     float dim;          // 1 = active line, <1 = dimmed inactive line
     float glow;         // strength of the bright band at the playhead
     vec4  baseColor;    // colour of the part that has not been sung yet
-    vec4  sungColorA;   // colour of the sung part at the left end of the line
-    vec4  sungColorB;   // colour of the sung part at the right end of the line
+    vec4  sungColorA;   // colour of the part that has been sung
     vec4  glowColor;    // colour of the bright band at the playhead
 };
 
@@ -28,8 +27,8 @@ void main()
     float x = qt_TexCoord0.x;
 
     // 0 = already sung, 1 = not sung yet. Smoothstep gives the boundary a soft
-    // gradient instead of a hard cut; the ends are clamped so a line that has
-    // not started stays fully dim and a finished one stays fully highlighted.
+    // gradient instead of a hard cut; the clamps keep a line that has not
+    // started entirely unsung and a finished one entirely sung.
     float unsung;
     if (progress <= 0.0)
         unsung = 1.0;
@@ -37,11 +36,8 @@ void main()
         unsung = 0.0;
     else
         unsung = smoothstep(progress - edge, progress + edge, x);
-    // float unsung = step(progress, x);
 
-    // The sung part carries a gradient across the whole line plus a bright band
-    // centred on the current playback position.
-    // vec3 sung = mix(sungColorA.rgb, sungColorB.rgb, clamp(x, 0.0, 1.0));
+    // The sung part carries a bright band centred on the playback position.
     vec3 sung = sungColorA.rgb;
     if (progress > 0.0 && progress < 1.0) {
         float d = (x - progress) / max(edge, 1e-4);
