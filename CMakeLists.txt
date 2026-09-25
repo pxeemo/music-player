@@ -21,33 +21,44 @@ qt_policy(SET QTP0001 NEW)
 # types registered in the Karaoke module would be visible to them.
 qt_policy(SET QTP0004 NEW)
 
-qt_add_executable(karaoke
-    main.cpp
-    lyrics.h
-    lyrics.cpp
-    playbackclock.h
-    playbackclock.cpp
+qt_add_executable(
+	karaoke
+	main.cpp
 )
 
 # Compile the GLSL sources to .qsb at build time instead of committing them.
 # BATCHABLE is required for vertex shaders used with Qt Quick's ShaderEffect.
 # The results are embedded as :/shaders/karaoke.vert.qsb and .frag.qsb
-qt_add_shaders(karaoke "shaders"
-    BATCHABLE
-    PREFIX "/shaders"
-    BASE   "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    FILES
-        shaders/karaoke.vert
-        shaders/karaoke.frag
+qt_add_shaders(
+	karaoke
+	"shaders"
+	BATCHABLE
+	PREFIX
+	"/shaders"
+	BASE
+	"${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+	FILES
+	shaders/karaoke.vert
+	shaders/karaoke.frag
 )
 
 # The QML files plus every C++ type marked with QML_ELEMENT().
-qt_add_qml_module(karaoke
-    URI Karaoke
-    VERSION 1.0
-    QML_FILES
-        qml/Main.qml
-        qml/KaraokeLine.qml
+qt_add_qml_module(
+	karaoke
+	URI
+	Karaoke
+	VERSION
+	1.0
+	QML_FILES
+	qml/Main.qml
+	qml/KaraokeLine.qml
+	SOURCES
+	src/playbackclock.h
+	src/playbackclock.cpp
+	src/lyrics.h
+	src/lyrics.cpp
 )
-
+target_include_directories(karaoke
+	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 target_link_libraries(karaoke PRIVATE Qt6::Quick Qt6::Qml)
