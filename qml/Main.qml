@@ -13,10 +13,7 @@ ApplicationWindow {
     // The line currently being sung: drives both the highlight and the view.
     readonly property int activeLine: lyrics.activeLine(clock.position)
 
-    onActiveLineChanged: {
-        console.log("activeLine -> " + activeLine)
-        scroller.centerOn(activeLine)
-    }
+    onActiveLineChanged: scroller.centerOn(activeLine)
 
     LyricsModel {
         id: lyrics
@@ -67,13 +64,9 @@ ApplicationWindow {
 
             ScrollBar.vertical: ScrollBar { }
 
-            // TEMPORARY instrumentation
-            onDraggingChanged: {
-                console.log("flickable dragging=" + dragging)
-                if (dragging)
-                    centering.stop()
-            }
-            onFlickingChanged: console.log("flickable flicking=" + flicking)
+            // A hand drag takes priority over the centering animation so the
+            // two never fight each other.
+            onDraggingChanged: if (dragging) centering.stop()
             onHeightChanged: contentY = Math.min(contentY, Math.max(0, contentHeight - height))
 
             // Brings the given line to the middle of the window.
@@ -84,11 +77,7 @@ ApplicationWindow {
                 if (!item)
                     return
                 var target = column.y + item.y + item.height / 2 - height / 2
-                var to = Math.max(0, Math.min(target, contentHeight - height))
-                console.log("centerOn index=" + index + " target=" + target + " to=" + to
-                            + " contentY=" + contentY + " viewH=" + height
-                            + " colY=" + column.y + " itemY=" + item.y)
-                centering.to = to
+                centering.to = Math.max(0, Math.min(target, contentHeight - height))
                 centering.restart()
             }
 
@@ -98,10 +87,6 @@ ApplicationWindow {
                 property: "contentY"
                 duration: 420
                 easing.type: Easing.InOutCubic
-                onRunningChanged: console.log("centering running=" + running
-                                               + " contentY=" + scroller.contentY
-                                               + " to=" + to)
-                onStopped: console.log("centering stopped at contentY=" + scroller.contentY)
             }
 
             Column {
