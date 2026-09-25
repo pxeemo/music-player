@@ -11,62 +11,47 @@
 #include <QtQml/qqmlregistration.h>
 
 class PlaybackClock : public QObject {
-    Q_OBJECT
-    QML_ELEMENT
-    QML_SINGLETON
-    Q_PROPERTY(bool playing READ playing WRITE setPlaying NOTIFY playingChanged)
-    Q_PROPERTY(bool loop READ loop WRITE setLoop NOTIFY loopChanged)
-    Q_PROPERTY(qreal position READ position NOTIFY positionChanged)
-    Q_PROPERTY(
-        qreal duration READ duration WRITE setDuration NOTIFY durationChanged)
+  Q_OBJECT
+  QML_ELEMENT
+  QML_SINGLETON
 
-  public:
-    explicit PlaybackClock(QObject *parent = nullptr);
+  Q_PROPERTY(bool playing READ playing WRITE setPlaying NOTIFY playingChanged)
+  Q_PROPERTY(bool loop READ loop WRITE setLoop NOTIFY loopChanged)
+  Q_PROPERTY(qreal position READ position NOTIFY positionChanged)
+  Q_PROPERTY(
+      qreal duration READ duration WRITE setDuration NOTIFY durationChanged)
 
-    class PlaybackClock : public QObject {
-        Q_OBJECT
-        Q_PROPERTY(
-            bool playing READ playing WRITE setPlaying NOTIFY playingChanged)
-        Q_PROPERTY(bool loop READ loop WRITE setLoop NOTIFY loopChanged)
-        Q_PROPERTY(qreal position READ position NOTIFY positionChanged)
-        Q_PROPERTY(qreal duration READ duration WRITE setDuration NOTIFY
-                       durationChanged)
-        QML_ELEMENT
+public:
+  explicit PlaybackClock(QObject *parent = nullptr);
 
-      public:
-        explicit PlaybackClock(QObject *parent = nullptr);
+  bool playing() const { return m_playing; }
+  void setPlaying(bool playing);
 
-        bool playing() const { return m_playing; }
-        void setPlaying(bool playing);
+  bool loop() const { return m_loop; }
+  void setLoop(bool loop);
 
-        bool loop() const { return m_loop; }
-        void setLoop(bool loop);
+  qreal position() const { return m_position; }
+  qreal duration() const { return m_duration; }
+  void setDuration(qreal duration);
 
-        qreal position() const { return m_position; }
-        qreal duration() const { return m_duration; }
-        void setDuration(qreal duration);
+  Q_INVOKABLE void toggle();
+  Q_INVOKABLE void seek(qreal seconds);
 
-        Q_INVOKABLE void toggle();
-        Q_INVOKABLE void seek(qreal seconds);
+signals:
+  void playingChanged();
+  void loopChanged();
+  void positionChanged();
+  void durationChanged();
 
-      signals:
+private:
+  void advance();
 
-        void playingChanged();
-        void loopChanged();
-        void positionChanged();
-        void durationChanged();
+  QTimer m_timer;
+  QElapsedTimer m_elapsed;
 
-      private:
-        void advance();
-
-        QTimer m_timer;
-        QElapsedTimer m_elapsed;
-
-        qreal m_base = 0.0; // position at the moment playback was (re)started
-
-        qreal m_position = 0.0;
-        qreal m_duration = 0.0;
-        bool m_playing = false;
-        bool m_loop = true;
-    };
+  qreal m_base = 0.0;
+  qreal m_position = 0.0;
+  qreal m_duration = 0.0;
+  bool m_playing = false;
+  bool m_loop = true;
 };
