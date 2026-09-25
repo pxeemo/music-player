@@ -8,6 +8,7 @@ compile_commands.json
 # QML cache
 .qmlcache/
 *.qmlc
+.qmlls.ini
 
 # Editor / IDE
 .cache/
