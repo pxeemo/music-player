@@ -2,6 +2,8 @@ import Karaoke 1.0
 import QtQuick
 import QtQuick.Controls
 
+pragma ComponentBehavior: Bound
+
 ApplicationWindow {
 	id: window
 
@@ -26,7 +28,7 @@ ApplicationWindow {
 		PlaybackClock.playing = true;
 	}
 	onActiveLineChanged: scroller.centerOn(activeLine)
-	
+
 	Binding {
 		property: "duration"
 		target: PlaybackClock
@@ -106,7 +108,7 @@ ApplicationWindow {
 
 					KaraokeLine {
 						required property int index
-						
+
 						active: window.activeLine === index
 						line: LyricsModel.lineAt(index)
 						position: PlaybackClock.position
