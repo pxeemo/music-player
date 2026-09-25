@@ -7,7 +7,7 @@ once into a texture and recoloured left to right entirely on the GPU.
 
 ```sh
 cmake -S . -B build -G Ninja
-ninja -C build
+cmake --build build
 ./build/karaoke
 ```
 
