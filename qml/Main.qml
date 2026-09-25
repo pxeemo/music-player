@@ -1,137 +1,145 @@
+import Karaoke 1.0
 import QtQuick
 import QtQuick.Controls
 
 ApplicationWindow {
-    id: window
+	id: window
 
-    width: 1000
-    height: 640
-    visible: true
-    title: "Karaoke · Qt 6 ShaderEffect demo"
-    color: "#08080c"
+	// The line currently being sung: drives both the highlight and the view.
+	readonly property int activeLine: LyricsModel.activeLine(PlaybackClock.position)
 
-    // The line currently being sung: drives both the highlight and the view.
-    readonly property int activeLine: lyrics.activeLine(clock.position)
+	function formatTime(seconds) {
+		var s = Math.max(0, seconds);
+		var m = Math.floor(s / 60);
+		var r = Math.floor(s % 60);
+		return m + ":" + (r < 10 ? "0" : "") + r;
+	}
 
-    onActiveLineChanged: scroller.centerOn(activeLine)
+	color: "#08080c"
+	height: 640
+	title: "Karaoke · Qt 6 ShaderEffect demo"
+	visible: true
+	width: 1000
 
-    LyricsModel {
-        id: lyrics
-        Component.onCompleted: loadDemoLyrics()
-    }
+	Component.onCompleted: {
+		LyricsModel.loadDemoLyrics();
+		PlaybackClock.playing = true;
+	}
+	onActiveLineChanged: scroller.centerOn(activeLine)
+	
+	Binding {
+		property: "duration"
+		target: PlaybackClock
+		value: Math.max(LyricsModel.duration + 2.0, 1.0)
+	}
 
-    // A single running clock drives every line.
-    PlaybackClock {
-        id: clock
-        duration: Math.max(lyrics.duration + 2.0, 1.0)
-        playing: true
-    }
+	Shortcut {
+		sequence: "Space"
 
-    Shortcut {
-        sequence: "Space"
-        onActivated: clock.toggle()
-    }
+		onActivated: PlaybackClock.toggle()
+	}
 
-    function formatTime(seconds) {
-        var s = Math.max(0, seconds)
-        var m = Math.floor(s / 60)
-        var r = Math.floor(s % 60)
-        return m + ":" + (r < 10 ? "0" : "") + r
-    }
+	Item {
+		id: stage
 
-    Item {
-        id: stage
-        anchors.fill: parent
-        anchors.margins: 56
+		anchors.fill: parent
+		anchors.margins: 56
 
-        // More lines than fit in the window: flick with the wheel or a drag to
-        // read ahead, and the view recenters whenever a line starts being sung.
-        Flickable {
-            id: scroller
+		// More lines than fit in the window: flick with the wheel or a drag to
+		// read ahead, and the view recenters whenever a line starts being sung.
+		Flickable {
+			id: scroller
 
-            anchors.fill: parent
-            contentWidth: width
-            contentHeight: column.height + 2 * edgeSlack
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            flickableDirection: Flickable.VerticalFlick
+			// Half a screen of slack above and below the list while it still
+			// fits, which keeps a short list centered exactly as it was before
+			// scrolling existed. Once it overflows the slack is zero and the
+			// list behaves like any other scrollable view.
+			readonly property real edgeSlack: Math.max(0, (height - column.height) / 2)
 
-            // Half a screen of slack above and below the list while it still
-            // fits, which keeps a short list centered exactly as it was before
-            // scrolling existed. Once it overflows the slack is zero and the
-            // list behaves like any other scrollable view.
-            readonly property real edgeSlack: Math.max(0, (height - column.height) / 2)
+			// Brings the given line to the middle of the window.
+			function centerOn(index) {
+				if (index < 0)
+					return;
+				var item = repeater.itemAt(index);
+				if (!item)
+					return;
+				var target = column.y + item.y + item.height / 2 - height / 2;
+				centering.to = Math.max(0, Math.min(target, contentHeight - height));
+				centering.restart();
+			}
 
-            ScrollBar.vertical: ScrollBar { }
+			anchors.fill: parent
+			boundsBehavior: Flickable.StopAtBounds
+			clip: true
+			contentHeight: column.height + 2 * edgeSlack
+			contentWidth: width
+			flickableDirection: Flickable.VerticalFlick
 
-            // A hand drag takes priority over the centering animation so the
-            // two never fight each other.
-            onDraggingChanged: if (dragging) centering.stop()
-            onHeightChanged: contentY = Math.min(contentY, Math.max(0, contentHeight - height))
+			ScrollBar.vertical: ScrollBar {
+			}
 
-            // Brings the given line to the middle of the window.
-            function centerOn(index) {
-                if (index < 0)
-                    return
-                var item = repeater.itemAt(index)
-                if (!item)
-                    return
-                var target = column.y + item.y + item.height / 2 - height / 2
-                centering.to = Math.max(0, Math.min(target, contentHeight - height))
-                centering.restart()
-            }
+			// A hand drag takes priority over the centering animation so the
+			// two never fight each other.
+			onDraggingChanged: if (dragging)
+				centering.stop()
+			onHeightChanged: contentY = Math.min(contentY, Math.max(0, contentHeight - height))
 
-            NumberAnimation {
-                id: centering
-                target: scroller
-                property: "contentY"
-                duration: 420
-                easing.type: Easing.InOutCubic
-            }
+			NumberAnimation {
+				id: centering
 
-            Column {
-                id: column
-                y: scroller.edgeSlack
-                spacing: 34
+				duration: 420
+				easing.type: Easing.InOutCubic
+				property: "contentY"
+				target: scroller
+			}
 
-                Repeater {
-                    id: repeater
-                    model: lyrics.lines
+			Column {
+				id: column
 
-                    KaraokeLine {
-                        required property int index
+				spacing: 34
+				y: scroller.edgeSlack
 
-                        line: lyrics.lineAt(index)
-                        position: clock.position
-                        active: window.activeLine === index
-                    }
-                }
-            }
-        }
-    }
+				Repeater {
+					id: repeater
 
-    Row {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
-        spacing: 14
+					model: LyricsModel.lines
 
-        Text {
-            text: clock.playing ? "Pause" : "Play"
-            color: "#7d7d88"
-            font.pixelSize: 13
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: clock.toggle()
-            }
-        }
+					KaraokeLine {
+						required property int index
+						
+						active: window.activeLine === index
+						line: LyricsModel.lineAt(index)
+						position: PlaybackClock.position
+					}
+				}
+			}
+		}
+	}
 
-        Text {
-            text: window.formatTime(clock.position) + "  /  " + window.formatTime(clock.duration)
-            color: "#4e4e58"
-            font.family: "monospace"
-            font.pixelSize: 13
-        }
-    }
+	Row {
+		anchors.bottom: parent.bottom
+		anchors.bottomMargin: 24
+		anchors.horizontalCenter: parent.horizontalCenter
+		spacing: 14
+
+		Text {
+			color: "#7d7d88"
+			font.pixelSize: 13
+			text: PlaybackClock.playing ? "Pause" : "Play"
+
+			MouseArea {
+				anchors.fill: parent
+				cursorShape: Qt.PointingHandCursor
+
+				onClicked: PlaybackClock.toggle()
+			}
+		}
+
+		Text {
+			color: "#4e4e58"
+			font.family: "monospace"
+			font.pixelSize: 13
+			text: window.formatTime(PlaybackClock.position) + " / " + window.formatTime(PlaybackClock.duration)
+		}
+	}
 }
