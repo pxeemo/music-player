@@ -13,32 +13,18 @@
 #include <QtQml/qqmlregistration.h>
 
 /// One sung word with its time range, in seconds from the start of the song.
-<<<<<<< HEAD
 class Word : public QObject {
-=======
-class Word : public QObject
-{
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     Q_OBJECT
     Q_PROPERTY(QString text READ text WRITE setText NOTIFY textChanged)
     Q_PROPERTY(qreal start READ start WRITE setStart NOTIFY startChanged)
     Q_PROPERTY(qreal end READ end WRITE setEnd NOTIFY endChanged)
     QML_ELEMENT
 
-<<<<<<< HEAD
   public:
     explicit Word(QObject *parent = nullptr) : QObject(parent) {}
 
     QString text() const { return m_text; }
     void setText(const QString &text) {
-=======
-public:
-    explicit Word(QObject *parent = nullptr) : QObject(parent) {}
-
-    QString text() const { return m_text; }
-    void setText(const QString &text)
-    {
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
         if (m_text == text)
             return;
         m_text = text;
@@ -46,12 +32,7 @@ public:
     }
 
     qreal start() const { return m_start; }
-<<<<<<< HEAD
     void setStart(qreal start) {
-=======
-    void setStart(qreal start)
-    {
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
         if (qFuzzyCompare(m_start, start))
             return;
         m_start = start;
@@ -59,32 +40,19 @@ public:
     }
 
     qreal end() const { return m_end; }
-<<<<<<< HEAD
     void setEnd(qreal end) {
-=======
-    void setEnd(qreal end)
-    {
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
         if (qFuzzyCompare(m_end, end))
             return;
         m_end = end;
         emit endChanged();
     }
 
-<<<<<<< HEAD
   signals:
-=======
-signals:
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     void textChanged();
     void startChanged();
     void endChanged();
 
-<<<<<<< HEAD
   private:
-=======
-private:
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     QString m_text;
     qreal m_start = 0.0;
     qreal m_end = 0.0;
@@ -92,12 +60,7 @@ private:
 
 /// One lyric line: an ordered list of words. start/end follow the first and
 /// last word, so no separate line timing has to be kept in sync.
-<<<<<<< HEAD
 class LyricLine : public QObject {
-=======
-class LyricLine : public QObject
-{
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     Q_OBJECT
     Q_PROPERTY(QQmlListProperty<Word> words READ words NOTIFY wordsChanged)
     Q_PROPERTY(QString text READ text NOTIFY wordsChanged)
@@ -105,19 +68,12 @@ class LyricLine : public QObject
     Q_PROPERTY(qreal end READ end NOTIFY wordsChanged)
     QML_ELEMENT
 
-<<<<<<< HEAD
   public:
     explicit LyricLine(QObject *parent = nullptr) : QObject(parent) {}
 
     QQmlListProperty<Word> words() {
         return QQmlListProperty<Word>(this, &m_words);
     }
-=======
-public:
-    explicit LyricLine(QObject *parent = nullptr) : QObject(parent) {}
-
-    QQmlListProperty<Word> words() { return QQmlListProperty<Word>(this, &m_words); }
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
 
     QString text() const;
     qreal start() const;
@@ -126,23 +82,15 @@ public:
     Q_INVOKABLE Word *addWord(const QString &text, qreal start, qreal end);
     Q_INVOKABLE void clear();
 
-<<<<<<< HEAD
   signals:
     void wordsChanged();
 
   private:
-=======
-signals:
-    void wordsChanged();
-
-private:
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     QList<Word *> m_words;
 };
 
 /// Owns every lyric line. Populated by a loader - here the hard-coded demo,
 /// later a file parser.
-<<<<<<< HEAD
 class LyricsModel : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -156,20 +104,6 @@ class LyricsModel : public QObject {
     QQmlListProperty<LyricLine> lines() {
         return QQmlListProperty<LyricLine>(this, &m_lines);
     }
-=======
-class LyricsModel : public QObject
-{
-    Q_OBJECT
-    Q_PROPERTY(QQmlListProperty<LyricLine> lines READ lines NOTIFY linesChanged)
-    Q_PROPERTY(int lineCount READ lineCount NOTIFY linesChanged)
-    Q_PROPERTY(qreal duration READ duration NOTIFY linesChanged)
-    QML_ELEMENT
-
-public:
-    explicit LyricsModel(QObject *parent = nullptr) : QObject(parent) {}
-
-    QQmlListProperty<LyricLine> lines() { return QQmlListProperty<LyricLine>(this, &m_lines); }
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
 
     int lineCount() const { return m_lines.size(); }
     qreal duration() const;
@@ -177,7 +111,6 @@ public:
     Q_INVOKABLE LyricLine *lineAt(int index) const;
     Q_INVOKABLE LyricLine *addLine();
     Q_INVOKABLE void clear();
-<<<<<<< HEAD
     Q_INVOKABLE int activeLine(qreal position) const;
     Q_INVOKABLE void loadDemoLyrics();
 
@@ -185,22 +118,6 @@ public:
     void linesChanged();
 
   private:
-=======
-
-    /// Index of the line currently being sung: the last line that has started.
-    /// Returns -1 before the first line begins.
-    Q_INVOKABLE int activeLine(qreal position) const;
-
-    /// Demo data. This is the only place the hard-coded timings live.
-    Q_INVOKABLE void loadDemoLyrics();
-
-signals:
-    void linesChanged();
-
-private:
-    /// Emits linesChanged(), unless a bulk load is in progress - see
-    /// loadDemoLyrics().
->>>>>>> a1707b0b544d18feaf8ddd09a460fcebdba42648
     void notifyLinesChanged();
 
     QList<LyricLine *> m_lines;
