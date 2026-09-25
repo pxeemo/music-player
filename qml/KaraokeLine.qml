@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // One lyric line.
@@ -27,7 +28,10 @@ Item {
     property real activeDim: 1.0             // dimming of the line being sung
     property real sizeBoost: 1.06            // how much bigger the singing line gets
     property int transitionDuration: 320     // ms for the activate/deactivate tween
-    property font textFont: Qt.font({ pixelSize: 34, weight: Font.DemiBold })
+    property font textFont: Qt.font({
+        pixelSize: 34,
+        weight: Font.DemiBold
+    })
     readonly property real pad: 12           // breathing room around the glyphs
 
     readonly property var wordList: line ? line.words : []
@@ -38,17 +42,22 @@ Item {
     // so a line fades up and grows when it starts being sung, then fades back
     // down and shrinks once the next line takes over - no colour or size snap.
     property real dim: active ? activeDim : inactiveDim
-    property real pixelSize: active ? textFont.pixelSize * sizeBoost
-                                     : textFont.pixelSize
+    property real pixelSize: active ? textFont.pixelSize * sizeBoost : textFont.pixelSize
     // Follows pixelSize directly (it is a pure function of it), so it must not
     // get its own Behavior - that would queue a second tween behind the first.
     property real wordGap: pixelSize * 0.30
 
     Behavior on dim {
-        NumberAnimation { duration: root.transitionDuration; easing.type: Easing.InOutCubic }
+        NumberAnimation {
+            duration: root.transitionDuration
+            easing.type: Easing.InOutCubic
+        }
     }
     Behavior on pixelSize {
-        NumberAnimation { duration: root.transitionDuration; easing.type: Easing.InOutCubic }
+        NumberAnimation {
+            duration: root.transitionDuration
+            easing.type: Easing.InOutCubic
+        }
     }
 
     width: textItem.width
@@ -71,6 +80,8 @@ Item {
                 model: root.wordList
 
                 Text {
+                    required property var modelData
+
                     text: modelData.text
                     color: root.baseColor
                     // Rebuilt from the animated pixelSize so the glyphs are
@@ -118,47 +129,48 @@ Item {
     // word to word.
     function lerp(t0, x0, t1, x1, t) {
         if (t1 <= t0)
-            return x1
-        var f = (t - t0) / (t1 - t0)
-        if (f < 0) f = 0
-        else if (f > 1) f = 1
-        return x0 + (x1 - x0) * f
+            return x1;
+        var f = (t - t0) / (t1 - t0);
+        if (f < 0)
+            f = 0;
+        else if (f > 1)
+            f = 1;
+        return x0 + (x1 - x0) * f;
     }
 
     function computeProgress(t) {
         if (!line || wordList.length === 0)
-            return 0
+            return 0;
         if (t <= line.start)
-            return 0
+            return 0;
         if (t >= line.end)
-            return 1
+            return 1;
 
-        var texWidth = textItem.width
+        var texWidth = textItem.width;
         if (texWidth <= 0)
-            return 0
+            return 0;
 
-        var prevT = line.start
-        var prevX = 0
+        var prevT = line.start;
+        var prevX = 0;
 
         for (var i = 0; i < wordList.length; ++i) {
-            var word = wordList[i]
-            var item = words.itemAt(i)
+            var word = wordList[i];
+            var item = words.itemAt(i);
             if (!item)
-                break
-
-            var x0 = (root.pad + item.x) / texWidth
-            var x1 = (root.pad + item.x + item.width) / texWidth
+                break;
+            var x0 = (root.pad + item.x) / texWidth;
+            var x1 = (root.pad + item.x + item.width) / texWidth;
 
             if (t <= word.start)          // in the gap before this word
-                return lerp(prevT, prevX, word.start, x0, t)
+                return lerp(prevT, prevX, word.start, x0, t);
             if (t <= word.end)            // inside this word
-                return lerp(word.start, x0, word.end, x1, t)
+                return lerp(word.start, x0, word.end, x1, t);
 
-            prevT = word.end
-            prevX = x1
+            prevT = word.end;
+            prevX = x1;
         }
 
         // Past the last word: sweep the remainder of the line.
-        return lerp(prevT, prevX, line.end, 1, t)
+        return lerp(prevT, prevX, line.end, 1, t);
     }
 }
