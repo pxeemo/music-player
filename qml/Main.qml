@@ -87,8 +87,8 @@ ApplicationWindow {
             NumberAnimation {
                 id: smoothscrolling
 
-                duration: 750
-                easing.type: Easing.InOutCubic
+                duration: 1000
+                easing.type: Easing.InOutQuart
                 property: "contentY"
                 target: scroller
             }

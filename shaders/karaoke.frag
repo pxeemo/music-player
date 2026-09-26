@@ -15,7 +15,7 @@ layout(std140, binding = 0) uniform buf {
     float dim;          // 1 = active line, <1 = dimmed inactive line
     float glow;         // strength of the bright band at the playhead
     vec4  baseColor;    // colour of the part that has not been sung yet
-    vec4  sungColorA;   // colour of the part that has been sung
+    vec4  sungColor;    // colour of the part that has been sung
     vec4  glowColor;    // colour of the bright band at the playhead
 };
 
@@ -38,7 +38,7 @@ void main()
         unsung = smoothstep(progress - edge, progress + edge, x);
 
     // The sung part carries a bright band centred on the playback position.
-    vec3 sung = sungColorA.rgb;
+    vec3 sung = sungColor.rgb;
     if (progress > 0.0 && progress < 1.0) {
         float d = (x - progress) / max(edge, 1e-4);
         sung = mix(sung, glowColor.rgb, exp(-d * d) * glow);

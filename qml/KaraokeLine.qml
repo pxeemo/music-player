@@ -20,16 +20,17 @@ Item {
 
     // ---- appearance (all adjustable from QML) ----------------------------
     property color baseColor: "#9b9ba4"      // not sung yet
-    property color sungColorA: "#ffffff"     // the part that has been sung
+    property color sungColor: "#ffffff"      // the part that has been sung
     property color glowColor: "#ffd9ec"      // bright band at the playhead
     property real edge: 0.03                 // soft boundary, in line widths
     property real glow: 0.55                 // strength of the bright band
     property real inactiveDim: 0.5           // dimming of the non-active lines
     property real activeDim: 1.0             // dimming of the line being sung
-    property real sizeBoost: 1.1             // how much bigger the singing line gets
-    property int transitionDuration: 750     // ms for the activate/deactivate tween
+    property real sizeReduce: 0.94           // how much smaller the unsung line gets
+    property int transitionDuration: 1000    // ms for the activate/deactivate tween
+    property int transitionTiming: Easing.InOutQuart
     property font textFont: Qt.font({
-        pixelSize: 34,
+        pixelSize: 42,
         weight: Font.DemiBold
     })
     readonly property real pad: 0           // breathing room around the glyphs
@@ -42,21 +43,20 @@ Item {
     // so a line fades up and grows when it starts being sung, then fades back
     // down and shrinks once the next line takes over - no colour or size snap.
     property real dim: active ? activeDim : inactiveDim
-    property real pixelSize: active ? textFont.pixelSize * sizeBoost : textFont.pixelSize
-    // Follows pixelSize directly (it is a pure function of it), so it must not
-    // get its own Behavior - that would queue a second tween behind the first.
-    property real wordGap: pixelSize * 0.30
+
+    scale: active ? 1.0 : sizeReduce
+    transformOrigin: Item.Left
 
     Behavior on dim {
         NumberAnimation {
             duration: root.transitionDuration
-            easing.type: Easing.InOutCubic
+            easing.type: root.transitionTiming
         }
     }
-    Behavior on pixelSize {
+    Behavior on scale {
         NumberAnimation {
             duration: root.transitionDuration
-            easing.type: Easing.InOutCubic
+            easing.type: root.transitionTiming
         }
     }
 
@@ -73,7 +73,7 @@ Item {
             id: row
             x: root.pad
             y: root.pad
-            spacing: root.wordGap
+            spacing: root.textFont.pixelSize * 0.3
 
             Repeater {
                 id: words
@@ -89,7 +89,7 @@ Item {
                     font: Qt.font({
                         family: root.textFont.family,
                         weight: root.textFont.weight,
-                        pixelSize: root.pixelSize
+                        pixelSize: root.textFont.pixelSize
                     })
                 }
             }
@@ -113,7 +113,7 @@ Item {
         property real dim: root.dim
         property real glow: root.glow
         property color baseColor: root.baseColor
-        property color sungColorA: root.sungColorA
+        property color sungColor: root.sungColor
         property color glowColor: root.glowColor
         property var source: textTexture
 

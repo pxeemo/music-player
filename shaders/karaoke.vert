@@ -20,7 +20,7 @@ layout(std140, binding = 0) uniform buf {
     float dim;          // 1 = active line, <1 = dimmed inactive line
     float glow;         // strength of the bright band at the playhead
     vec4  baseColor;    // colour of the part that has not been sung yet
-    vec4  sungColorA;   // colour of the part that has been sung
+    vec4  sungColor;    // colour of the part that has been sung
     vec4  glowColor;    // colour of the bright band at the playhead
 };
 
