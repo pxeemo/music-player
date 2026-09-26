@@ -64,9 +64,9 @@ ApplicationWindow {
                 var item = repeater.itemAt(index);
                 if (!item)
                     return;
-                var target = column.y + item.y + item.height / 2 - height / 2;
-                centering.to = Math.max(0, Math.min(target, contentHeight - height));
-                centering.restart();
+                var target = column.y + item.y - height / 5;
+                smoothscrolling.to = Math.max(0, Math.min(target, contentHeight - height));
+                smoothscrolling.restart();
             }
 
             anchors.fill: parent
@@ -81,13 +81,13 @@ ApplicationWindow {
             // A hand drag takes priority over the centering animation so the
             // two never fight each other.
             onDraggingChanged: if (dragging)
-                centering.stop()
+                smoothscrolling.stop()
             onHeightChanged: contentY = Math.min(contentY, Math.max(0, contentHeight - height))
 
             NumberAnimation {
-                id: centering
+                id: smoothscrolling
 
-                duration: 420
+                duration: 750
                 easing.type: Easing.InOutCubic
                 property: "contentY"
                 target: scroller
@@ -96,8 +96,12 @@ ApplicationWindow {
             Column {
                 id: column
 
-                spacing: 34
+                property Item lastItem: repeater.itemAt(repeater.count - 1)
+
+                spacing: 24
                 y: scroller.edgeSlack
+                topPadding: scroller.height / 5
+                bottomPadding: scroller.height / 5 * 4 - lastItem.height
 
                 Repeater {
                     id: repeater

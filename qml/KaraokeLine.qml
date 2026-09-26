@@ -26,13 +26,13 @@ Item {
     property real glow: 0.55                 // strength of the bright band
     property real inactiveDim: 0.5           // dimming of the non-active lines
     property real activeDim: 1.0             // dimming of the line being sung
-    property real sizeBoost: 1.06            // how much bigger the singing line gets
-    property int transitionDuration: 320     // ms for the activate/deactivate tween
+    property real sizeBoost: 1.1             // how much bigger the singing line gets
+    property int transitionDuration: 750     // ms for the activate/deactivate tween
     property font textFont: Qt.font({
         pixelSize: 34,
         weight: Font.DemiBold
     })
-    readonly property real pad: 12           // breathing room around the glyphs
+    readonly property real pad: 0           // breathing room around the glyphs
 
     readonly property var wordList: line ? line.words : []
     readonly property real progress: computeProgress(position)
