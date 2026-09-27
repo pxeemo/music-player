@@ -39,6 +39,11 @@ qt_add_qml_module(karaoke
 
     QML_FILES
         qml/Main.qml
+        qml/SongsPage.qml
+        qml/NowPlayingPage.qml
+        qml/Artwork.qml
+        qml/LyricsPanel.qml
+        qml/LyricsView.qml
         qml/KaraokeLine.qml
 
     SOURCES
@@ -46,6 +51,8 @@ qt_add_qml_module(karaoke
         src/playbackclock.cpp
         src/lyrics.h
         src/lyrics.cpp
+        src/song.h
+        src/song.cpp
 )
 
 target_include_directories(karaoke

@@ -2,7 +2,7 @@
 //
 // These types deliberately know nothing about shaders, Text items or playback
 // UI: they only carry text plus word start/end timestamps. A later phase can
-// replace loadDemoLyrics() with an LRC/TTML parser that fills the exact same
+// replace the demo loaders with an LRC/TTML parser that fills the exact same
 // structure, and the rendering layer will not have to change.
 
 #pragma once
@@ -87,39 +87,4 @@ class LyricLine : public QObject {
 
   private:
     QList<Word *> m_words;
-};
-
-/// Owns every lyric line. Populated by a loader - here the hard-coded demo,
-/// later a file parser.
-class LyricsModel : public QObject {
-    Q_OBJECT
-    QML_ELEMENT
-    QML_SINGLETON
-    Q_PROPERTY(QQmlListProperty<LyricLine> lines READ lines NOTIFY linesChanged)
-    Q_PROPERTY(int lineCount READ lineCount NOTIFY linesChanged)
-    Q_PROPERTY(qreal duration READ duration NOTIFY linesChanged)
-
-  public:
-    explicit LyricsModel(QObject *parent = nullptr) : QObject(parent) {}
-    QQmlListProperty<LyricLine> lines() {
-        return QQmlListProperty<LyricLine>(this, &m_lines);
-    }
-
-    int lineCount() const { return m_lines.size(); }
-    qreal duration() const;
-
-    Q_INVOKABLE LyricLine *lineAt(int index) const;
-    Q_INVOKABLE LyricLine *addLine();
-    Q_INVOKABLE void clear();
-    Q_INVOKABLE int activeLine(qreal position) const;
-    Q_INVOKABLE void loadDemoLyrics();
-
-  signals:
-    void linesChanged();
-
-  private:
-    void notifyLinesChanged();
-
-    QList<LyricLine *> m_lines;
-    bool m_bulkLoading = false;
 };
