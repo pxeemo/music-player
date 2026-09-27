@@ -197,6 +197,46 @@ Item {
                         }
                     }
                 }
+
+                Rectangle {
+                    id: lyricButton
+
+                    color: handleLyricButtonMouse.containsMouse ? "#1c1c28" : (page.lyricsExpanded ? "#d2d2d2" : "#12121a")
+                    radius: 12
+                    width: 42
+                    height: 42
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Column {
+                        anchors.centerIn: parent
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: page.lyricsExpanded ? "#101010" : "#7d7d88"
+                            font.pixelSize: 16
+                            font.weight: Font.Bold
+                            text: "\u266A"
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: page.lyricsExpanded ? "#101010" : "#4e4e58"
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                            text: "Lyric"
+                        }
+                    }
+
+                    MouseArea {
+                        id: handleLyricButtonMouse
+
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+
+                        onClicked: page.lyricsExpanded = !page.lyricsExpanded
+                    }
+                }
             }
         }
 
