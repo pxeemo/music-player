@@ -69,7 +69,7 @@ Item {
         width: row.width + 2 * root.pad
         height: row.height + 2 * root.pad
 
-        Row {
+        Flow {
             id: row
             x: root.pad
             y: root.pad

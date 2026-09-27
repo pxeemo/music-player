@@ -42,7 +42,6 @@ qt_add_qml_module(karaoke
         qml/SongsPage.qml
         qml/NowPlayingPage.qml
         qml/Artwork.qml
-        qml/LyricsPanel.qml
         qml/LyricsView.qml
         qml/KaraokeLine.qml
 

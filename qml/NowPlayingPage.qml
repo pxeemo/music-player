@@ -84,29 +84,35 @@ Item {
         anchors.leftMargin: 48
         anchors.right: parent.right
         anchors.rightMargin: 48
-        anchors.top: parent.top
-        anchors.topMargin: 96
+        anchors.top: back.bottom
+        anchors.topMargin: 48
         spacing: 36
 
         Item {
-            id: left
+            id: infoPanel
+
+            Behavior on width {
+                NumberAnimation {
+                   	duration: 250
+                   	easing.type: Easing.InOutQuad
+                }
+            }
 
             height: parent.height
-            width: parent.width - panel.width - parent.spacing
+            width: page.lyricsExpanded ? parent.width * 2 / 6 : parent.width
 
             Column {
                 id: info
 
                 anchors.centerIn: parent
                 spacing: 20
-                width: parent.width
 
                 Artwork {
                     id: cover
 
                     height: width
                     song: page.song
-                    width: Math.min(left.width * 0.72, left.height * 0.5)
+                    width: 240
                     x: (parent.width - width) / 2
                 }
 
@@ -167,8 +173,10 @@ Item {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
 
-                                onClicked: if (PlaybackClock.duration > 0)
-                                    PlaybackClock.seek(mouse.x / width * PlaybackClock.duration)
+                                onClicked: function (mouse) {
+                                    if (PlaybackClock.duration > 0)
+                                        PlaybackClock.seek(mouse.x / width * PlaybackClock.duration);
+                                }
                             }
                         }
 
@@ -240,14 +248,60 @@ Item {
             }
         }
 
-        LyricsPanel {
-            id: panel
+        // The collapsible lyrics half of the now-playing screen.
+        //
+        // When expanded it shows the full lyric sheet with a slim handle on its right
+        // edge; clicking the handle collapses the panel down to just that handle and
+        // the artwork next to it fills the freed space. The width is animated here so
+        // the host page can simply lay it out in a Row and let it repartition.
+        Item {
+            id: lyricsPanel
 
-            activeLine: page.activeLine
-            expanded: page.lyricsExpanded
-            expandedWidth: Math.max(300, layout.width * 0.44)
             height: parent.height
-            song: page.song
+            width: page.lyricsExpanded ? layout.width * 4 / 6 : 0
+            opacity: page.lyricsExpanded ? 1.0 : 0.0
+
+            property Song song: page.song
+            property bool expanded: page.lyricsExpanded
+            property int activeLine: page.activeLine
+
+            Behavior on opacity {
+                SequentialAnimation {
+                    PauseAnimation {
+                        duration: 150
+                    }
+                    NumberAnimation {
+                        duration: 350
+                        easing.type: Easing.Linear
+                    }
+                }
+            }
+
+            clip: true
+
+            // ---- lyrics ----------------------------------------------------------
+            Item {
+                id: content
+
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.top: parent.top
+                clip: true
+                opacity: lyricsPanel.expanded ? 1 : 0
+                width: Math.max(0, lyricsPanel.width)
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 200
+                    }
+                }
+
+                LyricsView {
+                    anchors.fill: parent
+                    activeLine: lyricsPanel.activeLine
+                    song: lyricsPanel.song
+                }
+            }
         }
     }
 }
