@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import Karaoke 1.0
 import QtQuick
+import QtQuick.Layouts
 
 // The now-playing screen: cover on the left, the collapsible lyric panel on
 // the right. Pushed by SongsPage with the tapped Song.
@@ -75,45 +76,45 @@ Item {
     }
 
     // ---- artwork | lyrics ------------------------------------------------
-    Row {
+    RowLayout {
         id: layout
 
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 44
         anchors.left: parent.left
-        anchors.leftMargin: 48
         anchors.right: parent.right
-        anchors.rightMargin: 48
+        anchors.bottom: parent.bottom
         anchors.top: back.bottom
-        anchors.topMargin: 48
-        spacing: 36
+        anchors.margins: 48
+        spacing: 42
 
         Item {
             id: infoPanel
 
-            Behavior on width {
+            Layout.fillHeight: true
+            Layout.fillWidth: true
+            Layout.minimumWidth: info.width
+
+            // visible: parent.width >= 800 || !page.lyricsExpanded
+
+            Behavior on Layout.preferredWidth {
                 NumberAnimation {
-                   	duration: 250
-                   	easing.type: Easing.InOutQuad
+                    duration: 250
+                    easing.type: Easing.InOutQuad
                 }
             }
-
-            height: parent.height
-            width: page.lyricsExpanded ? parent.width * 2 / 6 : parent.width
 
             Column {
                 id: info
 
                 anchors.centerIn: parent
+                width: 250
                 spacing: 20
 
                 Artwork {
                     id: cover
 
-                    height: width
                     song: page.song
-                    width: 240
-                    x: (parent.width - width) / 2
+                    width: parent.width
+                    height: width
                 }
 
                 Text {
@@ -257,23 +258,27 @@ Item {
         Item {
             id: lyricsPanel
 
-            height: parent.height
-            width: page.lyricsExpanded ? layout.width * 4 / 6 : 0
-            opacity: page.lyricsExpanded ? 1.0 : 0.0
-
             property Song song: page.song
             property bool expanded: page.lyricsExpanded
             property int activeLine: page.activeLine
 
+            Layout.fillHeight: true
+            Layout.fillWidth: true
+            Layout.minimumWidth: page.lyricsExpanded ? 700 : 0
+
+            Behavior on Layout.minimumWidth {
+                NumberAnimation {
+                    duration: 250
+                    easing.type: Easing.InOutQuad
+                }
+            }
+
+            opacity: page.lyricsExpanded ? 1.0 : 0.0
+
             Behavior on opacity {
-                SequentialAnimation {
-                    PauseAnimation {
-                        duration: 150
-                    }
-                    NumberAnimation {
-                        duration: 350
-                        easing.type: Easing.Linear
-                    }
+                NumberAnimation {
+                    duration: 350
+                    easing.type: Easing.Linear
                 }
             }
 
