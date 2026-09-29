@@ -1,8 +1,14 @@
 #version 440
 
-// Karaoke sweep: recolour the rendered glyphs left to right according to the
-// continuously changing `progress` uniform. The glyph shape comes entirely
-// from the text texture, so the transparent background is never touched.
+// Karaoke sweep: recolour the rendered glyphs along the reading order
+// according to the continuously changing `progress` uniform. The glyph shape
+// comes entirely from the text texture, so the transparent background is never
+// touched.
+//
+// `coords` is a second texture holding, in its red channel, each fragment's
+// normalised position along the reading order (left to right, then the next
+// row). Using it instead of qt_TexCoord0.x keeps the sweep correct when a line
+// wraps onto several rows.
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -10,7 +16,7 @@ layout(location = 0) out vec4 fragColor;
 layout(std140, binding = 0) uniform buf {
     mat4  qt_Matrix;
     float qt_Opacity;
-    float progress;     // 0..1 horizontal highlight position
+    float progress;     // 0..1 reading-order highlight position
     float edge;         // width of the soft boundary, in line widths
     float dim;          // 1 = active line, <1 = dimmed inactive line
     float glow;         // strength of the bright band at the playhead
@@ -20,11 +26,12 @@ layout(std140, binding = 0) uniform buf {
 };
 
 layout(binding = 1) uniform sampler2D source;
+layout(binding = 2) uniform sampler2D coords;
 
 void main()
 {
     vec4 txt = texture(source, qt_TexCoord0);
-    float x = qt_TexCoord0.x;
+    float x = texture(coords, qt_TexCoord0).r;
 
     // 0 = already sung, 1 = not sung yet. Smoothstep gives the boundary a soft
     // gradient instead of a hard cut; the clamps keep a line that has not

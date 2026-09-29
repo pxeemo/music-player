@@ -1,11 +1,13 @@
 # Karaoke
 
-A Qt 6 / QML demo of Apple-Music-style karaoke lyrics: each line is rendered
-once into a texture and recoloured left to right entirely on the GPU.
+A Qt 6 / QML music player: it scans your music folder, plays the files with
+GStreamer, reads tags and lyrics with TagLib, and shows the lyrics as plain
+text (synced, GPU-highlighted lyrics are the next phase).
 
-The app opens on a **songs list**. Tapping a song opens its **now-playing**
-screen, where the cover sits on the left and a **collapsible lyrics panel** sits
-next to it on the right.
+The app opens on a **songs list**. Tapping a track starts a library queue and
+opens the **now-playing** screen: the cover and transport in the middle, the
+**lyrics** pane on the right and the **queue** on the left. The two side panes
+are mutually exclusive.
 
 ## Build & run
 
@@ -15,48 +17,69 @@ cmake --build build
 ./build/karaoke
 ```
 
-Requires Qt 6.5+ (Quick, Qml, ShaderTools). Shaders are compiled to `.qsb` at
+Requires Qt 6.5+ (Quick, Qml, ShaderTools), GStreamer 1.0 (`gstreamer-1.0`) and
+TagLib 2.x, all found through `pkg-config`. Shaders are compiled to `.qsb` at
 build time, so nothing generated is committed.
+
+## Music folder
+
+The library is scanned from `QStandardPaths::MusicLocation` (your XDG music
+directory, e.g. `~/mus`), recursively. If that does not exist it falls back to
+`~/Music`. For each track TagLib reads title/artist/album/duration and embedded
+lyrics; a sidecar `.lrc`/`.ttml` file with the same base name wins over the
+embedded tag. Lyrics are shown as extracted plain text for now - no timing yet.
 
 ## Controls
 
-- **Songs list** — click a row to open the now-playing screen
-- **Now-playing** — click the handle on the lyrics panel's right edge to
-  collapse/expand it; click the seek bar to scrub
-- **Space** — pause / resume (while a song is open)
-- **Mouse wheel or drag** — scroll the lyrics by hand
-- The lyrics recenter themselves whenever a line starts being sung
+- **Songs list** — click a row to play it and open the now-playing screen
+- **Now-playing** — `Prev` / `Play` / `Next`, a click-to-scrub seek bar, and the
+  `Queue` / `Repeat` / `Shuffle` toggles (repeat cycles off → all → one)
+- **Queue** — opens on the left, lists the play queue; click a row to jump to it
+- **Space** — pause / resume
+
+Two environment variables help when testing without a sound device or window:
+
+- `KARAOKE_AUDIO_SINK=fakesink` — pick the GStreamer audio sink
+- `QT_QPA_PLATFORM=offscreen` — run without a display
 
 ## How it works
 
+Playback is one GStreamer `playbin`, driven from the Qt event loop: a timer
+polls the bus for errors/end-of-stream and queries the position, so no GLib main
+loop is needed. The player also owns the queue, repeat and shuffle.
+
+`MusicLibrary` scans off the event loop a chunk at a time, so the list fills in
+without blocking the UI.
+
 ```
-Text (one static Text per word, laid out in a Row)
-  -> ShaderEffectSource   the whole line captured as one texture
-  -> ShaderEffect         GPU recolours it from left to right
+source file ──TagLib──▶ Song (title/artist/duration/lyrics)
+            ──playbin─▶ audio out
 ```
 
-Nothing about the text is rebuilt or recoloured on the CPU. The only value that
-changes per frame is `progress`, a normalised 0..1 position interpolated from
-the word timings against the laid-out word positions.
+The dormant karaoke renderer is still in the repo for the synced-lyrics phase:
+
+```
+Flow of Text words     -> ShaderEffectSource   the glyphs, as one texture
+Flow of word gradients -> ShaderEffectSource   each fragment's reading position
+ShaderEffect           -> recolours along the reading order
+```
+
+A line may wrap onto several rows; each word paints an opaque gradient giving
+that pixel's position along the reading order, so the shader compares it with
+`progress` instead of raw `x`.
 
 Navigation is a single `StackView`: `SongsPage` is the root and pushes
-`NowPlayingPage` with the tapped `Song`.
+`NowPlayingPage`.
 
 | File | Role |
 | --- | --- |
-| `lyrics.h/.cpp` | the timing model: `Word`, `LyricLine` |
-| `song.h/.cpp` | `Song` (metadata + own lyrics) and the `SongsModel` catalogue |
-| `playbackclock.h/.cpp` | one 16 ms clock driving every line |
-| `qml/Main.qml` | window shell and `StackView` navigation |
+| `song.h/.cpp` | `Song` (track metadata + lyrics) and the `MusicLibrary` scanner |
+| `player.h/.cpp` | GStreamer playback, queue, repeat and shuffle |
+| `qml/Main.qml` | window shell, `StackView` navigation, starts the scan |
 | `qml/SongsPage.qml` | the songs list (main page) |
-| `qml/NowPlayingPage.qml` | cover, transport and the collapsible lyrics panel |
-| `qml/LyricsPanel.qml` | collapse/expand container + handle |
-| `qml/LyricsView.qml` | the scrolling lyric sheet for one song |
-| `qml/Artwork.qml` | a song's gradient cover |
-| `qml/KaraokeLine.qml` | one line: layout, activation fade, size swell, `progress` |
-| `shaders/` | the sweep itself (`.qsb` built by CMake) |
-
-Appearance is tunable from QML (`KaraokeLine` exposes the colours, `edge`,
-`glow`, `sizeBoost`, `transitionDuration`); `SongsModel::loadDemoSongs()` is the
-only place the hard-coded songs live and is the seam a real library/LRC parser
-would fill.
+| `qml/NowPlayingPage.qml` | cover, transport and the queue/lyrics panes |
+| `qml/QueueView.qml` | the play queue list |
+| `qml/LyricsText.qml` | plain-text lyrics view |
+| `qml/Artwork.qml` | a track's gradient cover |
+| `qml/KaraokeLine.qml`, `qml/LyricsView.qml` | dormant synced-lyrics renderer |
+| `shaders/` | the GPU sweep used by the dormant renderer |

@@ -4,37 +4,59 @@ import Karaoke 1.0
 import QtQuick
 import QtQuick.Layouts
 
-// The now-playing screen: cover on the left, the collapsible lyric panel on
-// the right. Pushed by SongsPage with the tapped Song.
+// The now-playing screen.
+//
+// Three columns: the queue on the left, the cover/transport in the middle and
+// the lyrics on the right. The two side panes are mutually exclusive - opening
+// one closes the other - and each animates its width in or out.
 Item {
     id: page
 
-    property Song song
     property var stackView
-    property bool lyricsExpanded: true
+    property Song song: Player.currentSong
 
-    readonly property int activeLine: page.song ? page.song.activeLine(PlaybackClock.position) : -1
+    property bool lyricsOpen: true
+    property bool queueOpen: false
+
+    // Animated 0..1 open fractions. Driving layout from these (rather than
+    // animating widths directly) keeps resizes correct.
+    property real lyricsFrac: lyricsOpen ? 1 : 0
+    property real queueFrac: queueOpen ? 1 : 0
+
+    readonly property real sideWidth: Math.min(380, layout.width * 0.5)
+    readonly property bool repeatActive: Player.repeatMode !== Player.RepeatOff
+
+    Behavior on lyricsFrac {
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.InOutQuad
+        }
+    }
+
+    Behavior on queueFrac {
+        NumberAnimation {
+            duration: 250
+            easing.type: Easing.InOutQuad
+        }
+    }
+
+    function toggleLyrics() {
+        lyricsOpen = !lyricsOpen;
+        if (lyricsOpen)
+            queueOpen = false;
+    }
+
+    function toggleQueue() {
+        queueOpen = !queueOpen;
+        if (queueOpen)
+            lyricsOpen = false;
+    }
 
     function formatTime(seconds) {
         var s = Math.max(0, seconds);
         var m = Math.floor(s / 60);
         var r = Math.floor(s % 60);
         return m + ":" + (r < 10 ? "0" : "") + r;
-    }
-
-    Component.onCompleted: {
-        PlaybackClock.seek(0);
-        PlaybackClock.playing = true;
-    }
-
-    // Leaving the screen (popped back to the list) stops playback. On
-    // destruction covers every way the page can go away.
-    Component.onDestruction: PlaybackClock.playing = false
-
-    Binding {
-        property: "duration"
-        target: PlaybackClock
-        value: page.song ? Math.max(page.song.duration + 2.0, 1.0) : 1.0
     }
 
     Rectangle {
@@ -75,52 +97,73 @@ Item {
         }
     }
 
-    // ---- artwork | lyrics ------------------------------------------------
+    // ---- queue | cover | lyrics -----------------------------------------
     RowLayout {
         id: layout
 
-        anchors.left: parent.left
-        anchors.right: parent.right
         anchors.bottom: parent.bottom
+        anchors.bottomMargin: 40
+        anchors.left: parent.left
+        anchors.leftMargin: 48
+        anchors.right: parent.right
+        anchors.rightMargin: 48
         anchors.top: back.bottom
-        anchors.margins: 48
-        spacing: 42
+        anchors.topMargin: 20
+        spacing: 36
 
+        // Left: the queue.
+        Item {
+            id: queuePanel
+
+            Layout.fillHeight: true
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: page.sideWidth * page.queueFrac
+            clip: true
+            opacity: page.queueFrac
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 200
+                }
+            }
+
+            QueueView {
+                anchors.fill: parent
+
+                onSongChosen: function (index) {
+                    Player.playQueueIndex(index);
+                }
+            }
+        }
+
+        // Centre: cover, metadata and controls.
         Item {
             id: infoPanel
 
             Layout.fillHeight: true
             Layout.fillWidth: true
-            Layout.minimumWidth: info.width
-
-            // visible: parent.width >= 800 || !page.lyricsExpanded
-
-            Behavior on Layout.preferredWidth {
-                NumberAnimation {
-                    duration: 250
-                    easing.type: Easing.InOutQuad
-                }
-            }
+            Layout.minimumWidth: 0
 
             Column {
                 id: info
 
                 anchors.centerIn: parent
-                width: 250
-                spacing: 20
+                spacing: 16
+                width: Math.min(280, infoPanel.width)
 
                 Artwork {
                     id: cover
 
-                    song: page.song
-                    width: parent.width
                     height: width
+                    song: page.song
+                    width: Math.min(parent.width, infoPanel.height * 0.42)
                 }
 
                 Text {
                     color: "white"
                     elide: Text.ElideRight
-                    font.pixelSize: 28
+                    font.pixelSize: 24
                     font.weight: Font.Bold
                     horizontalAlignment: Text.AlignHCenter
                     text: page.song ? page.song.title : ""
@@ -130,182 +173,180 @@ Item {
                 Text {
                     color: "#a0a0ac"
                     elide: Text.ElideRight
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     horizontalAlignment: Text.AlignHCenter
                     text: page.song ? page.song.artist : ""
                     width: parent.width
                 }
 
-                // ---- transport ----
+                Text {
+                    color: "#ff8a8a"
+                    elide: Text.ElideRight
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Player.errorString
+                    visible: Player.errorString.length > 0
+                    width: parent.width
+                }
+
+                // ---- seek bar ----
                 Item {
-                    height: controls.height
+                    id: seekbar
+
+                    height: 20
                     width: parent.width
 
-                    Column {
-                        id: controls
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#23232e"
+                        height: 4
+                        radius: 2
+                        width: parent.width
+                    }
 
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 10
-                        width: Math.min(parent.width, 340)
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "white"
+                        height: 4
+                        radius: 2
+                        width: parent.width * (Player.duration > 0 ? Math.min(1, Player.position / Player.duration) : 0)
+                    }
 
-                        Item {
-                            id: seekbar
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
 
-                            height: 20
-                            width: parent.width
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "#23232e"
-                                height: 4
-                                radius: 2
-                                width: parent.width
-                            }
-
-                            Rectangle {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: "white"
-                                height: 4
-                                radius: 2
-                                width: parent.width * (PlaybackClock.duration > 0 ? Math.min(1, PlaybackClock.position / PlaybackClock.duration) : 0)
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-
-                                onClicked: function (mouse) {
-                                    if (PlaybackClock.duration > 0)
-                                        PlaybackClock.seek(mouse.x / width * PlaybackClock.duration);
-                                }
-                            }
-                        }
-
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: 14
-
-                            Text {
-                                color: "#cfcfd8"
-                                font.pixelSize: 15
-                                text: PlaybackClock.playing ? "Pause" : "Play"
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: PlaybackClock.toggle()
-                                }
-                            }
-
-                            Text {
-                                color: "#5c5c68"
-                                font.family: "monospace"
-                                font.pixelSize: 13
-                                text: page.formatTime(PlaybackClock.position) + " / " + page.formatTime(PlaybackClock.duration)
-                            }
+                        onClicked: function (mouse) {
+                            if (Player.duration > 0)
+                                Player.seek(mouse.x / width * Player.duration);
                         }
                     }
                 }
 
-                Rectangle {
-                    id: lyricButton
-
-                    color: handleLyricButtonMouse.containsMouse ? "#1c1c28" : (page.lyricsExpanded ? "#d2d2d2" : "#12121a")
-                    radius: 12
-                    width: 42
-                    height: 42
+                Text {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    color: "#5c5c68"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    text: page.formatTime(Player.position) + " / " + page.formatTime(Player.duration)
+                }
 
-                    Column {
-                        anchors.centerIn: parent
+                // ---- previous / play / next ----
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 28
 
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            color: page.lyricsExpanded ? "#101010" : "#7d7d88"
-                            font.pixelSize: 16
-                            font.weight: Font.Bold
-                            text: "\u266A"
-                        }
+                    Text {
+                        color: "#cfcfd8"
+                        font.pixelSize: 15
+                        text: "Prev"
 
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            color: page.lyricsExpanded ? "#101010" : "#4e4e58"
-                            font.pixelSize: 9
-                            font.weight: Font.Bold
-                            text: "Lyric"
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Player.previous()
                         }
                     }
 
-                    MouseArea {
-                        id: handleLyricButtonMouse
+                    Text {
+                        color: "white"
+                        font.pixelSize: 16
+                        font.weight: Font.Bold
+                        text: Player.playing ? "Pause" : "Play"
 
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Player.toggle()
+                        }
+                    }
 
-                        onClicked: page.lyricsExpanded = !page.lyricsExpanded
+                    Text {
+                        color: "#cfcfd8"
+                        font.pixelSize: 15
+                        text: "Next"
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Player.next()
+                        }
+                    }
+                }
+
+                // ---- queue / repeat / shuffle ----
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 20
+
+                    Text {
+                        color: page.queueOpen ? "white" : "#8b8b96"
+                        font.pixelSize: 13
+                        text: "Queue"
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.toggleQueue()
+                        }
+                    }
+
+                    Text {
+                        color: page.repeatActive ? "white" : "#8b8b96"
+                        font.pixelSize: 13
+                        text: Player.repeatMode === Player.RepeatOne ? "Repeat 1" : (Player.repeatMode === Player.RepeatAll ? "Repeat all" : "Repeat")
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Player.cycleRepeat()
+                        }
+                    }
+
+                    Text {
+                        color: Player.shuffle ? "white" : "#8b8b96"
+                        font.pixelSize: 13
+                        text: "Shuffle"
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Player.toggleShuffle()
+                        }
                     }
                 }
             }
         }
 
-        // The collapsible lyrics half of the now-playing screen.
-        //
-        // When expanded it shows the full lyric sheet with a slim handle on its right
-        // edge; clicking the handle collapses the panel down to just that handle and
-        // the artwork next to it fills the freed space. The width is animated here so
-        // the host page can simply lay it out in a Row and let it repartition.
+        // Right: the lyrics.
         Item {
             id: lyricsPanel
 
-            property Song song: page.song
-            property bool expanded: page.lyricsExpanded
-            property int activeLine: page.activeLine
-
             Layout.fillHeight: true
             Layout.fillWidth: true
-            Layout.minimumWidth: page.lyricsExpanded ? 700 : 0
-
-            Behavior on Layout.minimumWidth {
-                NumberAnimation {
-                    duration: 250
-                    easing.type: Easing.InOutQuad
-                }
-            }
-
-            opacity: page.lyricsExpanded ? 1.0 : 0.0
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: page.sideWidth * page.lyricsFrac
+            clip: true
+            opacity: page.lyricsFrac
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: 350
-                    easing.type: Easing.Linear
+                    duration: 200
                 }
             }
 
-            clip: true
-
-            // ---- lyrics ----------------------------------------------------------
-            Item {
-                id: content
-
-                anchors.bottom: parent.bottom
+            Text {
                 anchors.left: parent.left
                 anchors.top: parent.top
-                clip: true
-                opacity: lyricsPanel.expanded ? 1 : 0
-                width: Math.max(0, lyricsPanel.width)
+                color: "#7d7d88"
+                font.pixelSize: 13
+                text: "Lyrics"
+            }
 
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: 200
-                    }
-                }
-
-                LyricsView {
-                    anchors.fill: parent
-                    activeLine: lyricsPanel.activeLine
-                    song: lyricsPanel.song
-                }
+            LyricsText {
+                anchors.fill: parent
+                anchors.topMargin: 26
+                text: page.song ? page.song.lyrics : ""
             }
         }
     }

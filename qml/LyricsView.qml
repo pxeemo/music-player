@@ -14,7 +14,10 @@ Item {
 
     property Song song
     property int activeLine: -1
-    property real lineSize: Math.max(22, Math.min(38, width * 0.062))
+    // Comfortable, readable size. It still gives on very narrow windows, but
+    // stays large enough that a long line wraps onto another row instead of
+    // being crushed to fit into one.
+    property real lineSize: Math.max(28, Math.min(38, width * 0.09))
 
     onActiveLineChanged: scroller.centerOn(activeLine)
 
@@ -85,6 +88,7 @@ Item {
                     active: root.activeLine === index
                     line: root.song.lineAt(index)
                     position: PlaybackClock.position
+                    wrapWidth: Math.max(120, root.width - 16)
                     textFont: Qt.font({
                         pixelSize: root.lineSize,
                         weight: Font.DemiBold

@@ -14,6 +14,10 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     ShaderTools
 )
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GST REQUIRED IMPORTED_TARGET gstreamer-1.0)
+pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
+
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(karaoke
@@ -42,8 +46,8 @@ qt_add_qml_module(karaoke
         qml/SongsPage.qml
         qml/NowPlayingPage.qml
         qml/Artwork.qml
-        qml/LyricsView.qml
-        qml/KaraokeLine.qml
+        qml/LyricsText.qml
+        qml/QueueView.qml
 
     SOURCES
         src/playbackclock.h
@@ -52,6 +56,8 @@ qt_add_qml_module(karaoke
         src/lyrics.cpp
         src/song.h
         src/song.cpp
+        src/player.h
+        src/player.cpp
 )
 
 target_include_directories(karaoke
@@ -61,4 +67,6 @@ target_include_directories(karaoke
 target_link_libraries(karaoke PRIVATE
     Qt6::Quick
     Qt6::Qml
+    PkgConfig::GST
+    PkgConfig::TAGLIB
 )

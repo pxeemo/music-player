@@ -2,13 +2,11 @@ pragma ComponentBehavior: Bound
 
 import Karaoke 1.0
 import QtQuick
+import QtQuick.Controls
 
-// The landing page: every song in the library, in catalogue order. Tapping a
-// row opens its now-playing page on top of this one.
-//
-// The StackView is passed in as `stackView` rather than reached through the
-// StackView.view attached property, which is null for a declarative
-// initialItem.
+// The landing page: every track MusicLibrary found, in the order it scanned
+// them. Tapping a row starts a library queue at that track and opens the
+// now-playing screen.
 Item {
     id: page
 
@@ -38,12 +36,26 @@ Item {
     }
 
     Text {
+        id: subtitle
+
         anchors.left: heading.left
         anchors.top: heading.bottom
         anchors.topMargin: 4
         color: "#7d7d88"
         font.pixelSize: 14
-        text: SongsModel.count + (SongsModel.count === 1 ? " track" : " tracks")
+        text: MusicLibrary.scanning ? ("Scanning " + MusicLibrary.scanned + " / " + MusicLibrary.total) : (MusicLibrary.count + (MusicLibrary.count === 1 ? " track" : " tracks"))
+    }
+
+    Text {
+        anchors.right: parent.right
+        anchors.rightMargin: 48
+        anchors.top: heading.top
+        color: "#5c5c68"
+        elide: Text.ElideLeft
+        font.pixelSize: 12
+        text: MusicLibrary.folder
+        width: parent.width * 0.5
+        horizontalAlignment: Text.AlignRight
     }
 
     ListView {
@@ -55,7 +67,7 @@ Item {
         anchors.top: heading.bottom
         anchors.topMargin: 44
         clip: true
-        model: SongsModel.songs
+        model: MusicLibrary.songs
         spacing: 6
 
         delegate: Item {
@@ -64,14 +76,14 @@ Item {
             required property int index
             required property var modelData
 
-            height: 92
+            height: 76
             width: ListView.view.width
 
             Rectangle {
                 anchors.fill: parent
                 anchors.leftMargin: 40
                 anchors.rightMargin: 40
-                color: rowMouse.containsMouse ? "#15151f" : "transparent"
+                color: row.index === Player.currentIndex && Player.currentSong ? "#15151f" : (rowMouse.containsMouse ? "#15151f" : "transparent")
                 radius: 14
             }
 
@@ -81,25 +93,23 @@ Item {
                 anchors.left: parent.left
                 anchors.leftMargin: 56
                 anchors.verticalCenter: parent.verticalCenter
-                height: 64
+                height: 52
                 song: row.modelData
-                width: 64
+                width: 52
             }
 
             Column {
-                id: labels
-
                 anchors.left: cover.right
                 anchors.leftMargin: 18
                 anchors.right: duration.left
                 anchors.rightMargin: 18
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 4
+                spacing: 3
 
                 Text {
                     color: "white"
                     elide: Text.ElideRight
-                    font.pixelSize: 18
+                    font.pixelSize: 17
                     font.weight: Font.DemiBold
                     text: row.modelData ? row.modelData.title : ""
                     width: parent.width
@@ -133,10 +143,12 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
 
-                onClicked: page.stackView.push(Qt.resolvedUrl("NowPlayingPage.qml"), {
-                    "song": row.modelData,
-                    "stackView": page.stackView
-                })
+                onClicked: {
+                    Player.playFromLibrary(row.index);
+                    page.stackView.push(Qt.resolvedUrl("NowPlayingPage.qml"), {
+                        "stackView": page.stackView
+                    });
+                }
             }
         }
     }

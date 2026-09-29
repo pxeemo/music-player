@@ -5,8 +5,8 @@ import QtQuick
 import QtQuick.Controls
 
 // Window shell. The app has two screens: the songs list (root) and the
-// now-playing screen pushed on top of it. Everything lyrics-related lives in
-// NowPlayingPage/LyricsPanel; this file only owns the window and navigation.
+// now-playing screen pushed on top of it. MusicLibrary scans the music folder;
+// Player owns playback and the queue.
 ApplicationWindow {
     id: window
 
@@ -16,7 +16,7 @@ ApplicationWindow {
     visible: true
     width: 1000
 
-    Component.onCompleted: SongsModel.loadDemoSongs()
+    Component.onCompleted: MusicLibrary.scan()
 
     StackView {
         id: stack
@@ -31,6 +31,6 @@ ApplicationWindow {
         enabled: stack.depth > 1
         sequence: "Space"
 
-        onActivated: PlaybackClock.toggle()
+        onActivated: Player.toggle()
     }
 }

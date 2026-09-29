@@ -15,7 +15,7 @@ layout(location = 0) out vec2 qt_TexCoord0;
 layout(std140, binding = 0) uniform buf {
     mat4  qt_Matrix;
     float qt_Opacity;
-    float progress;     // 0..1 horizontal highlight position
+    float progress;     // 0..1 reading-order highlight position
     float edge;         // width of the soft boundary, in line widths
     float dim;          // 1 = active line, <1 = dimmed inactive line
     float glow;         // strength of the bright band at the playhead
