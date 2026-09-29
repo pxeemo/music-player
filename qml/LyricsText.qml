@@ -9,6 +9,9 @@ Item {
     id: root
 
     property string text
+    /// Monospaced, smaller text - used for the raw parser dump.
+    property bool monospace: false
+    property string emptyText: "No lyrics available"
 
     readonly property bool empty: !text || text.length === 0
 
@@ -28,10 +31,11 @@ Item {
             id: label
 
             color: root.empty ? "#5c5c68" : "#d6d6de"
-            font.pixelSize: 16
+            font.family: root.monospace ? "monospace" : ""
+            font.pixelSize: root.monospace ? 12 : 16
             lineHeight: 1.35
             lineHeightMode: Text.ProportionalHeight
-            text: root.empty ? "No lyrics available" : root.text
+            text: root.empty ? root.emptyText : root.text
             width: scroller.width
             wrapMode: Text.Wrap
         }

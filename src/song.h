@@ -21,6 +21,9 @@
 #include <QtQml/qqmllist.h> // QQmlListProperty
 #include <QtQml/qqmlregistration.h>
 
+#include "lyricsdocument.h"
+#include "lyricsmodel.h"
+
 /// One track on disk.
 class Song : public QObject {
     Q_OBJECT
@@ -35,9 +38,11 @@ class Song : public QObject {
     Q_PROPERTY(bool hasLyrics READ hasLyrics NOTIFY lyricsChanged)
     Q_PROPERTY(QColor colorA READ colorA NOTIFY colorsChanged)
     Q_PROPERTY(QColor colorB READ colorB NOTIFY colorsChanged)
+    /// The structured lyrics, already flattened for the view. Never null.
+    Q_PROPERTY(LyricsDocument *document READ document CONSTANT)
 
   public:
-    explicit Song(QObject *parent = nullptr) : QObject(parent) {}
+    explicit Song(QObject *parent = nullptr);
 
     QString filePath() const { return m_filePath; }
     QUrl source() const { return QUrl::fromLocalFile(m_filePath); }
@@ -47,7 +52,9 @@ class Song : public QObject {
     QString album() const { return m_album; }
     qreal duration() const { return m_duration; }
     QString lyrics() const { return m_lyrics; }
-    bool hasLyrics() const { return !m_lyrics.isEmpty(); }
+    bool hasLyrics() const { return m_document && !m_document->empty(); }
+
+    LyricsDocument *document() const { return m_document; }
 
     // Deterministic cover colours derived from the track, so the artwork stays
     // stable across runs without needing embedded pictures.
@@ -60,6 +67,9 @@ class Song : public QObject {
     void setAlbum(const QString &album);
     void setDuration(qreal duration);
     void setLyrics(const QString &lyrics);
+    /// Hands a parsed document to the UI. This is the seam a concrete parser
+    /// fills in: build a `lyrics::Lyrics` and set it here.
+    void setLyricsDocument(lyrics::Lyrics &&document);
 
   signals:
     void filePathChanged();
@@ -77,6 +87,7 @@ class Song : public QObject {
     QString m_album;
     QString m_lyrics;
     qreal m_duration = 0.0;
+    LyricsDocument *m_document = nullptr;
 };
 
 /// Scans the music folder and owns every Song it finds.

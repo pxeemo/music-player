@@ -7,6 +7,8 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 
+#include <utility>
+
 #include <taglib/audioproperties.h>
 #include <taglib/fileref.h>
 #include <taglib/flacfile.h>
@@ -171,6 +173,25 @@ void titleFromFileName(const QFileInfo &info, QString *title, QString *artist)
 	}
 }
 
+// TEMPORARY placeholder for a real parser: present the already-extracted plain
+// text as one untimed lyric line per row, so the structured view has something
+// to show. A concrete parser replaces this call with a `lyrics::Lyrics` built
+// from the original .lrc/.ttml/embedded source; nothing else changes.
+lyrics::Lyrics fallbackDocument(const QString &plain, const QString &title, const QString &artist)
+{
+	lyrics::Lyrics document;
+	document.metadata().title = title;
+	document.metadata().artist = artist;
+	const QStringList rows = plain.split(QLatin1Char('\n'));
+	for (const QString &row : rows) {
+		const QString trimmed = row.trimmed();
+		if (trimmed.isEmpty())
+			continue;
+		document.addLine().mainVocal.text = trimmed;
+	}
+	return document;
+}
+
 void loadSongFromFile(const QString &path, Song *song)
 {
 	song->setFilePath(path);
@@ -222,6 +243,7 @@ void loadSongFromFile(const QString &path, Song *song)
 	song->setAlbum(album);
 	song->setDuration(duration);
 	song->setLyrics(lyrics.trimmed());
+	song->setLyricsDocument(fallbackDocument(lyrics.trimmed(), title, artist));
 }
 
 } // namespace
@@ -229,6 +251,13 @@ void loadSongFromFile(const QString &path, Song *song)
 // ---------------------------------------------------------------------------
 // Song
 // ---------------------------------------------------------------------------
+
+Song::Song(QObject *parent) : QObject(parent), m_document(new LyricsDocument(this)) {}
+
+void Song::setLyricsDocument(lyrics::Lyrics &&document)
+{
+	m_document->setLyrics(std::move(document));
+}
 
 void Song::setFilePath(const QString &path)
 {

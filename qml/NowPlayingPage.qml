@@ -17,6 +17,8 @@ Item {
 
     property bool lyricsOpen: true
     property bool queueOpen: false
+    // When true the lyrics pane shows the raw dump of the parsed document.
+    property bool showRaw: false
 
     // Animated 0..1 open fractions. Driving layout from these (rather than
     // animating widths directly) keeps resizes correct.
@@ -274,10 +276,22 @@ Item {
                     }
                 }
 
-                // ---- queue / repeat / shuffle ----
+                // ---- lyrics / queue / repeat / shuffle / raw ----
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 20
+                    spacing: 14
+
+                    Text {
+                        color: page.lyricsOpen ? "white" : "#8b8b96"
+                        font.pixelSize: 13
+                        text: "Lyrics"
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.toggleLyrics()
+                        }
+                    }
 
                     Text {
                         color: page.queueOpen ? "white" : "#8b8b96"
@@ -314,6 +328,18 @@ Item {
                             onClicked: Player.toggleShuffle()
                         }
                     }
+
+                    Text {
+                        color: page.showRaw ? "white" : "#8b8b96"
+                        font.pixelSize: 13
+                        text: "Raw"
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.showRaw = !page.showRaw
+                        }
+                    }
                 }
             }
         }
@@ -340,13 +366,23 @@ Item {
                 anchors.top: parent.top
                 color: "#7d7d88"
                 font.pixelSize: 13
-                text: "Lyrics"
+                text: page.showRaw ? "Lyrics \u00b7 raw" : "Lyrics"
+            }
+
+            LyricsView {
+                anchors.fill: parent
+                anchors.topMargin: 26
+                song: page.song
+                visible: !page.showRaw
             }
 
             LyricsText {
                 anchors.fill: parent
                 anchors.topMargin: 26
-                text: page.song ? page.song.lyrics : ""
+                emptyText: "(no parsed lyrics document)"
+                monospace: true
+                text: page.song && page.song.document ? page.song.document.debugText : ""
+                visible: page.showRaw
             }
         }
     }

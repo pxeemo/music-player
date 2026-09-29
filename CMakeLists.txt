@@ -47,6 +47,7 @@ qt_add_qml_module(karaoke
         qml/NowPlayingPage.qml
         qml/Artwork.qml
         qml/LyricsText.qml
+        qml/LyricsView.qml
         qml/QueueView.qml
 
     SOURCES
@@ -54,6 +55,11 @@ qt_add_qml_module(karaoke
         src/playbackclock.cpp
         src/lyrics.h
         src/lyrics.cpp
+        src/lyricsmodel.h
+        src/lyricsmodel.cpp
+        src/lyricsparser.h
+        src/lyricsdocument.h
+        src/lyricsdocument.cpp
         src/song.h
         src/song.cpp
         src/player.h
