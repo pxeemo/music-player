@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// One lyric line.
+// One synced lyric line.
 //
 //   Flow of Text words      -> ShaderEffectSource  (glyph texture)
 //   Repeater of gradients   -> ShaderEffectSource  (reading-order coordinate)
@@ -15,12 +15,18 @@ import QtQuick
 //
 // Nothing about the text is rebuilt or recoloured on the CPU: the only value
 // that changes per frame is `progress`, a normalised 0..1 position.
+//
+// Input is a list of timed words (`TimedWord`), so this renderer does not depend
+// on any particular lyrics source.
 
 Item {
     id: root
 
     // ---- supplied by the view -------------------------------------------
-    property LyricLine line: null
+    // Word timing for a synced line. Items expose `text`, `start` and `end`.
+    property var words: []
+    property real lineStart: 0
+    property real lineEnd: 0
     property real position: 0        // playback clock, in seconds
     property bool active: false
 
@@ -46,7 +52,7 @@ Item {
     })
     readonly property real pad: 0           // breathing room around the glyphs
 
-    readonly property var wordList: line ? line.words : []
+    readonly property int wordCount: wordItems.count
     readonly property real wordSpacing: textFont.pixelSize * 0.3
     readonly property real progress: computeProgress(position)
     // Total reading-order length of the line, used to normalise positions.
@@ -93,19 +99,19 @@ Item {
             y: root.pad
 
             Repeater {
-                id: words
+                id: wordItems
 
-                model: root.wordList
+                model: root.words
 
                 Text {
                     required property var modelData
 
-                    text: modelData.text
+                    text: modelData ? modelData.text : ""
                     color: root.baseColor
                     // Rebuilt from the animated pixelSize so the glyphs are
                     // re-rasterised crisp at every size instead of being scaled.
                     font: Qt.font({
-                        family: root.textFont.family,
+                        family: root.textFont.family ? root.textFont.family : "",
                         weight: root.textFont.weight,
                         pixelSize: root.textFont.pixelSize
                     })
@@ -126,7 +132,7 @@ Item {
         anchors.fill: textItem
 
         Repeater {
-            model: root.wordList
+            model: root.words
 
             Rectangle {
                 id: coord
@@ -134,7 +140,7 @@ Item {
                 required property int index
                 required property var modelData
 
-                readonly property var wordItem: words.count > index ? words.itemAt(index) : null
+                readonly property var wordItem: wordItems.count > index ? wordItems.itemAt(index) : null
                 readonly property var span: root.wordSpan(index)
 
                 height: wordItem ? wordItem.height : 0
@@ -208,14 +214,14 @@ Item {
 
     // Normalised [start, end] reading position of word `index`.
     function wordSpan(index) {
-        var count = root.wordList.length;
+        var count = root.wordCount;
         if (count === 0)
             return [0, 0];
         var total = root.readingWidth;
         var spacing = root.wordSpacing;
         var acc = 0;
         for (var i = 0; i < count; ++i) {
-            var item = words.itemAt(i);
+            var item = wordItems.itemAt(i);
             var w = item ? item.width : 0;
             if (i === index)
                 return [acc / total, (acc + w) / total];
@@ -227,13 +233,13 @@ Item {
     // Sum of every word's width plus the gaps between them. Read from the laid
     // out items, so it is correct once the Flow has wrapped.
     function computeReadingWidth() {
-        var count = words.count;
+        var count = root.wordCount;
         if (count === 0)
             return 1;
         var spacing = root.wordSpacing;
         var sum = 0;
         for (var i = 0; i < count; ++i) {
-            var item = words.itemAt(i);
+            var item = wordItems.itemAt(i);
             sum += item ? item.width : 0;
         }
         var total = sum + spacing * (count - 1);
@@ -244,26 +250,30 @@ Item {
     // between the anchors of each word and the gaps between them. Same maths as
     // a single-row line, but on the reading-order axis instead of x.
     function computeProgress(t) {
-        var count = root.wordList.length;
-        if (!line || count === 0)
+        var count = root.wordCount;
+        if (count === 0)
             return 0;
-        if (t <= line.start)
+        if (t <= lineStart)
             return 0;
-        if (t >= line.end)
+        if (t >= lineEnd)
             return 1;
 
         var total = root.readingWidth;
         if (total <= 0)
             return 0;
         var spacing = root.wordSpacing;
-        var prevT = line.start;
+        var prevT = lineStart;
         var prevR = 0;
         var acc = 0;
 
         for (var i = 0; i < count; ++i) {
-            var word = root.wordList[i];
-            var item = words.itemAt(i);
-            var w = item ? item.width : 0;
+            var item = wordItems.itemAt(i);
+            if (!item)
+                break;
+            var word = item.modelData;
+            if (!word)
+                break;
+            var w = item.width;
             var r0 = acc;
             var r1 = acc + w;
 
@@ -278,6 +288,6 @@ Item {
         }
 
         // Past the last word: sweep the remainder of the line.
-        return lerp(prevT, prevR / total, line.end, 1, t);
+        return lerp(prevT, prevR / total, lineEnd, 1, t);
     }
 }

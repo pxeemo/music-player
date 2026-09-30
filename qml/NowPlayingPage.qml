@@ -376,6 +376,7 @@ Item {
                 visible: !page.showRaw
             }
 
+            // Raw lyrics for debug
             LyricsText {
                 anchors.fill: parent
                 anchors.topMargin: 26

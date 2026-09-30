@@ -20,8 +20,32 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QVector>
 #include <QtQml/qqmllist.h> // QQmlListProperty
 #include <QtQml/qqmlregistration.h>
+
+/// One timed word, in seconds, for the synced karaoke renderer.
+class TimedWord : public QObject {
+    Q_OBJECT
+    QML_ELEMENT
+    QML_UNCREATABLE("Provided by LyricRow; not created from QML.")
+
+    Q_PROPERTY(QString text READ text CONSTANT)
+    Q_PROPERTY(qreal start READ start CONSTANT)
+    Q_PROPERTY(qreal end READ end CONSTANT)
+
+  public:
+    TimedWord(QString text, qreal start, qreal end, QObject *parent = nullptr);
+
+    QString text() const { return m_text; }
+    qreal start() const { return m_start; }
+    qreal end() const { return m_end; }
+
+  private:
+    QString m_text;
+    qreal m_start;
+    qreal m_end;
+};
 
 /// One drawn row of a lyrics document.
 class LyricRow : public QObject {
@@ -42,6 +66,13 @@ class LyricRow : public QObject {
     Q_PROPERTY(int groupIndex READ groupIndex CONSTANT)
     /// True for the first row of a group, so the view can space groups apart.
     Q_PROPERTY(bool groupStart READ groupStart CONSTANT)
+    /// True when the line has word- or syllable-level timing, so the renderer
+    /// should use the synced karaoke view instead of a plain line.
+    Q_PROPERTY(bool karaoke READ karaoke CONSTANT)
+    /// Word timing for the karaoke view; empty unless `karaoke` is true.
+    Q_PROPERTY(QQmlListProperty<TimedWord> words READ words CONSTANT)
+    Q_PROPERTY(qreal lineStart READ lineStart CONSTANT)
+    Q_PROPERTY(qreal lineEnd READ lineEnd CONSTANT)
 
   public:
     enum Kind {
@@ -53,8 +84,21 @@ class LyricRow : public QObject {
     };
     Q_ENUM(Kind)
 
+    struct WordSpec {
+        QString text;
+        qreal start = 0.0;
+        qreal end = 0.0;
+    };
+
+    struct Timed {
+        bool karaoke = false;
+        QVector<WordSpec> words;
+        qreal lineStart = 0.0;
+        qreal lineEnd = 0.0;
+    };
+
     LyricRow(Kind kind, QString text, QString agentName, qint64 startMs, qint64 groupStartMs,
-             int groupIndex, bool groupStart, QObject *parent = nullptr);
+             int groupIndex, bool groupStart, Timed timed, QObject *parent = nullptr);
 
     Kind kind() const { return m_kind; }
     QString text() const { return m_text; }
@@ -72,6 +116,11 @@ class LyricRow : public QObject {
     /// Start of the whole group, used to pick the active line; -1 when untimed.
     qint64 groupStartMs() const { return m_groupStartMs; }
 
+    bool karaoke() const { return m_karaoke; }
+    QQmlListProperty<TimedWord> words() { return QQmlListProperty<TimedWord>(this, &m_words); }
+    qreal lineStart() const { return m_lineStart; }
+    qreal lineEnd() const { return m_lineEnd; }
+
   private:
     Kind m_kind;
     QString m_text;
@@ -80,6 +129,10 @@ class LyricRow : public QObject {
     qint64 m_groupStartMs;
     int m_groupIndex;
     bool m_groupStart;
+    bool m_karaoke = false;
+    qreal m_lineStart = 0.0;
+    qreal m_lineEnd = 0.0;
+    QList<TimedWord *> m_words;
 };
 
 /// The flattened, UI-ready form of a `lyrics::Lyrics`.
@@ -121,7 +174,8 @@ class LyricsDocument : public QObject {
   private:
     void rebuild();
     LyricRow *addRow(LyricRow::Kind kind, const QString &text, const QString &agentName,
-                     qint64 startMs, qint64 groupStartMs, int groupIndex, bool groupStart);
+                     qint64 startMs, qint64 groupStartMs, int groupIndex, bool groupStart,
+                     LyricRow::Timed timed = {});
     QString agentName(lyrics::Id id) const;
 
     lyrics::Lyrics m_lyrics;

@@ -1,6 +1,7 @@
 #include "lyricsdocument.h"
 
 #include <QStringList>
+#include <QVector>
 
 #include <utility>
 
@@ -9,6 +10,82 @@ namespace {
 qint64 toMs(const lyrics::Timestamp &timestamp)
 {
 	return static_cast<qint64>(timestamp.count());
+}
+
+// Best-effort word timing for one vocal. Word timing wins; a word without its
+// own timing falls back to the span of its syllables. This never invents a
+// precision the source did not provide - if nothing is timed, the result is
+// "not karaoke".
+LyricRow::Timed buildTimed(const lyrics::Vocal &vocal, qint64 lineStartMs, qint64 lineEndMs)
+{
+	const qsizetype count = static_cast<qsizetype>(vocal.words.size());
+	if (count == 0)
+		return {};
+
+	QVector<qint64> start(count, -1);
+	QVector<qint64> end(count, -1);
+	bool anyTimed = false;
+	for (qsizetype i = 0; i < count; ++i) {
+		const lyrics::Word &word = vocal.words[static_cast<std::size_t>(i)];
+		if (word.timing) {
+			start[i] = toMs(word.timing->start);
+			if (word.timing->end)
+				end[i] = toMs(*word.timing->end);
+			anyTimed = true;
+		} else if (!word.syllables.empty()) {
+			for (const lyrics::Syllable &syllable : word.syllables) {
+				if (!syllable.timing)
+					continue;
+				const qint64 s = toMs(syllable.timing->start);
+				const qint64 e = syllable.timing->end ? toMs(*syllable.timing->end) : s;
+				if (start[i] < 0 || s < start[i])
+					start[i] = s;
+				if (end[i] < 0 || e > end[i])
+					end[i] = e;
+				anyTimed = true;
+			}
+		}
+	}
+	if (!anyTimed)
+		return {};
+
+	qint64 lineStart = lineStartMs;
+	qint64 lineEnd = lineEndMs;
+	for (qsizetype i = 0; i < count && lineStart < 0; ++i)
+		lineStart = start[i];
+	for (qsizetype i = count - 1; i >= 0 && lineEnd < 0; --i)
+		lineEnd = end[i];
+	if (lineStart < 0)
+		lineStart = 0;
+	if (lineEnd < 0)
+		lineEnd = lineStart;
+
+	// Fill the gaps so the renderer always sees a monotonic, fully timed list.
+	qint64 cursor = lineStart;
+	for (qsizetype i = 0; i < count; ++i) {
+		if (start[i] < 0)
+			start[i] = cursor;
+		if (start[i] < cursor)
+			start[i] = cursor;
+		cursor = start[i];
+	}
+	for (qsizetype i = 0; i < count; ++i) {
+		if (end[i] < 0)
+			end[i] = (i + 1 < count) ? start[i + 1] : lineEnd;
+		if (end[i] < start[i])
+			end[i] = start[i];
+	}
+
+	LyricRow::Timed timed;
+	timed.karaoke = true;
+	timed.lineStart = lineStart / 1000.0;
+	timed.lineEnd = lineEnd / 1000.0;
+	timed.words.reserve(count);
+	for (qsizetype i = 0; i < count; ++i) {
+		timed.words.append(LyricRow::WordSpec{
+			vocal.words[static_cast<std::size_t>(i)].text, start[i] / 1000.0, end[i] / 1000.0});
+	}
+	return timed;
 }
 
 QString formatTimestamp(const lyrics::Timestamp &timestamp)
@@ -49,15 +126,28 @@ QString agentTypeName(lyrics::AgentType type)
 } // namespace
 
 // ---------------------------------------------------------------------------
+// TimedWord
+// ---------------------------------------------------------------------------
+
+TimedWord::TimedWord(QString text, qreal start, qreal end, QObject *parent)
+	: QObject(parent), m_text(std::move(text)), m_start(start), m_end(end)
+{
+}
+
+// ---------------------------------------------------------------------------
 // LyricRow
 // ---------------------------------------------------------------------------
 
-LyricRow::LyricRow(Kind kind, QString text, QString agentName, qint64 startMs,
-				   qint64 groupStartMs, int groupIndex, bool groupStart, QObject *parent)
+LyricRow::LyricRow(Kind kind, QString text, QString agentName, qint64 startMs, qint64 groupStartMs,
+				   int groupIndex, bool groupStart, Timed timed, QObject *parent)
 	: QObject(parent), m_kind(kind), m_text(std::move(text)), m_agentName(std::move(agentName)),
 	  m_startMs(startMs), m_groupStartMs(groupStartMs), m_groupIndex(groupIndex),
-	  m_groupStart(groupStart)
+	  m_groupStart(groupStart), m_karaoke(timed.karaoke), m_lineStart(timed.lineStart),
+	  m_lineEnd(timed.lineEnd)
 {
+	m_words.reserve(timed.words.size());
+	for (const WordSpec &spec : timed.words)
+		m_words.append(new TimedWord(spec.text, spec.start, spec.end, this));
 }
 
 // ---------------------------------------------------------------------------
@@ -76,9 +166,11 @@ void LyricsDocument::setLyrics(lyrics::Lyrics &&document)
 }
 
 LyricRow *LyricsDocument::addRow(LyricRow::Kind kind, const QString &text, const QString &agentName,
-								 qint64 startMs, qint64 groupStartMs, int groupIndex, bool groupStart)
+								 qint64 startMs, qint64 groupStartMs, int groupIndex, bool groupStart,
+								 LyricRow::Timed timed)
 {
-	auto *row = new LyricRow(kind, text, agentName, startMs, groupStartMs, groupIndex, groupStart, this);
+	auto *row = new LyricRow(kind, text, agentName, startMs, groupStartMs, groupIndex, groupStart,
+							 std::move(timed), this);
 	if (groupStartMs >= 0)
 		m_timed = true;
 	m_rows.append(row);
@@ -121,9 +213,14 @@ void LyricsDocument::rebuild()
 			const auto *line = static_cast<const lyrics::Line *>(element.get());
 			const qint64 lineStart =
 				line->mainVocal.timing ? toMs(line->mainVocal.timing->start) : -1;
+			const qint64 lineEnd =
+				(line->mainVocal.timing && line->mainVocal.timing->end)
+					? toMs(*line->mainVocal.timing->end)
+					: -1;
 
 			addRow(LyricRow::Main, line->mainVocal.text, agentName(line->mainVocal.agentId),
-				   lineStart, lineStart, group, true);
+				   lineStart, lineStart, group, true,
+				   buildTimed(line->mainVocal, lineStart, lineEnd));
 
 			// Translations inherit the line's timing, so they highlight with it
 			// and a click seeks to the line's start.

@@ -48,6 +48,7 @@ qt_add_qml_module(karaoke
         qml/Artwork.qml
         qml/LyricsText.qml
         qml/LyricsView.qml
+        qml/KaraokeLine.qml
         qml/QueueView.qml
 
     SOURCES
