@@ -60,6 +60,7 @@ class LyricRow : public QObject {
     Q_PROPERTY(bool isTranslation READ isTranslation CONSTANT)
     Q_PROPERTY(bool isSection READ isSection CONSTANT)
     Q_PROPERTY(bool isInstrumental READ isInstrumental CONSTANT)
+    Q_PROPERTY(bool isRtl READ isRtl CONSTANT)
     /// Where a click should seek to, in ms, or -1 when the row is untimed.
     Q_PROPERTY(qint64 startMs READ startMs CONSTANT)
     /// Rows that belong to the same line share a group index.
@@ -109,6 +110,7 @@ class LyricRow : public QObject {
     bool isTranslation() const { return m_kind == Translation; }
     bool isSection() const { return m_kind == Section; }
     bool isInstrumental() const { return m_kind == Instrumental; }
+    bool isRtl() const { return m_isRtl; }
 
     qint64 startMs() const { return m_startMs; }
     int groupIndex() const { return m_groupIndex; }
@@ -129,6 +131,7 @@ class LyricRow : public QObject {
     qint64 m_groupStartMs;
     int m_groupIndex;
     bool m_groupStart;
+    bool m_isRtl = false;
     bool m_karaoke = false;
     qreal m_lineStart = 0.0;
     qreal m_lineEnd = 0.0;

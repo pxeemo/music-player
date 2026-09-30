@@ -27,9 +27,12 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <qtmetamacros.h>
 #include <vector>
 
 #include <QString>
+#include <QObject>
+#include <QChar>
 
 namespace lyrics {
 
@@ -47,6 +50,13 @@ struct Timing {
     std::optional<Timestamp> end{};
 };
 
+enum class TextDirection {
+    Ltr,
+    Rtl,
+};
+
+TextDirection textDirection(const QString &text);
+
 /// Empty when the source provides no timing for this item at all.
 using OptionalTiming = std::optional<Timing>;
 
@@ -54,12 +64,14 @@ using OptionalTiming = std::optional<Timing>;
 struct Syllable {
     QString text;
     OptionalTiming timing;
+    TextDirection direction() const;
 };
 
 /// A sung word, optionally split into syllables.
 struct Word {
     QString text;
     OptionalTiming timing;
+    TextDirection direction() const;
     std::vector<Syllable> syllables;
 };
 
@@ -98,6 +110,7 @@ struct Vocal {
     OptionalTiming timing;
     std::vector<Word> words;
     Id agentId = InvalidId;
+    TextDirection direction() const;
 };
 
 enum class ElementKind {

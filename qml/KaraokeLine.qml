@@ -29,6 +29,7 @@ Item {
     property real lineEnd: 0
     property real position: 0        // playback clock, in seconds
     property bool active: false
+    property bool rtl: false
 
     // Width available for the line, in pixels. A positive value wraps the
     // words onto as many rows as needed; 0 sizes the line to its content on a
@@ -65,7 +66,7 @@ Item {
     property real dim: active ? activeDim : inactiveDim
 
     scale: active ? 1.0 : sizeReduce
-    transformOrigin: Item.Left
+    transformOrigin: root.rtl ? Item.Right : Item.Left
 
     Behavior on dim {
         NumberAnimation {
@@ -95,6 +96,7 @@ Item {
 
             spacing: root.wordSpacing
             width: root.wrapWidth > 0 ? Math.max(1, root.wrapWidth - 2 * root.pad) : undefined
+            layoutDirection: root.rtl ? Qt.RightToLeft : Qt.LeftToRight
             x: root.pad
             y: root.pad
 
@@ -152,12 +154,12 @@ Item {
                     orientation: Gradient.Horizontal
 
                     GradientStop {
-                        color: Qt.rgba(coord.span[0], 0, 0, 1)
+                        color: Qt.rgba(coord.span[root.rtl ? 1 : 0], 0, 0, 1)
                         position: 0.0
                     }
 
                     GradientStop {
-                        color: Qt.rgba(coord.span[1], 0, 0, 1)
+                        color: Qt.rgba(coord.span[root.rtl ? 0 : 1], 0, 0, 1)
                         position: 1.0
                     }
                 }

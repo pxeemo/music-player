@@ -19,11 +19,17 @@ Item {
     property Song song
     property int transitionDuration: 1000
     property int transitionTiming: Easing.InOutQuart
+    // Start a line's transition this many milliseconds before its real start, so
+    // the fade is complete by the time it is actually sung. The same look-ahead
+    // makes the previous line start fading out 500 ms early. Defaults to half the
+    // transition duration. This only shifts *which* line is active; the synced
+    // word sweep still follows the real playback position.
+    property int activationLeadMs: Math.round(transitionDuration / 2)
 
     readonly property var document: root.song ? root.song.document : null
     readonly property real positionMs: Player.position * 1000
     readonly property bool timed: root.document ? root.document.timed : false
-    readonly property int activeGroup: root.document ? root.document.activeGroupIndex(positionMs) : -1
+    readonly property int activeGroup: root.document ? root.document.activeGroupIndex(positionMs + activationLeadMs) : -1
     readonly property real lineSize: Math.max(20, Math.min(32, width * 0.075))
 
     property real sizeReduce: 0.94           // how much smaller the unsung line gets
@@ -142,7 +148,7 @@ Item {
                         y: rowItem.topGap
 
                         scale: rowItem.active ? 1.0 : root.sizeReduce
-                        transformOrigin: Item.Left
+                        transformOrigin: rowItem.modelData.isRtl ? Item.Right : Item.Left
 
                         Behavior on color {
                             ColorAnimation {
@@ -170,9 +176,12 @@ Item {
                             pixelSize: rowItem.textSize,
                             weight: Font.DemiBold
                         })
+                        transitionDuration: root.transitionDuration
+                        transitionTiming: root.transitionTiming
                         visible: rowItem.modelData.karaoke
                         words: rowItem.modelData ? rowItem.modelData.words : []
                         wrapWidth: rowItem.width
+                        rtl: rowItem.modelData.isRtl
                         y: rowItem.topGap
                     }
 

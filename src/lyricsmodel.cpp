@@ -4,6 +4,40 @@
 
 namespace lyrics {
 
+TextDirection textDirection(const QString &text)
+{
+    for (const QChar character : text) {
+        switch (character.direction()) {
+        case QChar::DirL:
+            return TextDirection::Ltr;
+
+        case QChar::DirR:
+        case QChar::DirAL:
+            return TextDirection::Rtl;
+
+        default:
+            break;
+        }
+    }
+
+    return TextDirection::Ltr;
+}
+
+TextDirection Syllable::direction() const
+{
+    return textDirection(text);
+}
+
+TextDirection Word::direction() const
+{
+    return textDirection(text);
+}
+
+TextDirection Vocal::direction() const
+{
+    return textDirection(text);
+}
+
 Id Lyrics::addAgent(AgentType type, QString name)
 {
 	const Id id = newId();
