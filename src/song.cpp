@@ -1,5 +1,7 @@
 #include "song.h"
 
+#include "lrcparser.h"
+
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -173,10 +175,16 @@ void titleFromFileName(const QFileInfo &info, QString *title, QString *artist)
 	}
 }
 
-// TEMPORARY placeholder for a real parser: present the already-extracted plain
-// text as one untimed lyric line per row, so the structured view has something
-// to show. A concrete parser replaces this call with a `lyrics::Lyrics` built
-// from the original .lrc/.ttml/embedded source; nothing else changes.
+// Embedded lyrics have no file extension, so the format is guessed from the
+// text: TTML is XML and starts with '<'; LRC carries `[mm:ss.xx]` markers.
+bool looksLikeTtml(const QString &text)
+{
+	return text.trimmed().startsWith(QLatin1Char('<'));
+}
+
+// Fallback for lyric sources no parser handles yet (TTML, or untimed embedded
+// text): present the extracted plain text as one untimed lyric line per row, so
+// the view still shows something.
 lyrics::Lyrics fallbackDocument(const QString &plain, const QString &title, const QString &artist)
 {
 	lyrics::Lyrics document;
@@ -203,7 +211,7 @@ void loadSongFromFile(const QString &path, Song *song)
 	QString artist;
 	QString album;
 	qreal duration = 0.0;
-	QString lyrics;
+	QString embedded;
 
 	if (!ref.isNull()) {
 		if (const TagLib::Tag *tag = ref.tag()) {
@@ -213,7 +221,7 @@ void loadSongFromFile(const QString &path, Song *song)
 		}
 		if (const TagLib::AudioProperties *props = ref.audioProperties())
 			duration = props->lengthInMilliseconds() / 1000.0;
-		lyrics = embeddedLyrics(ref.file());
+		embedded = embeddedLyrics(ref.file());
 	}
 
 	if (title.isEmpty() || artist.isEmpty()) {
@@ -226,24 +234,51 @@ void loadSongFromFile(const QString &path, Song *song)
 			artist = fileArtist;
 	}
 
-	// A sidecar lyric file wins over whatever was embedded.
+	// Collect the raw lyric source. A sidecar file wins over the embedded tag,
+	// and its extension names the format; embedded lyrics have no extension, so
+	// the format is guessed from the text itself.
+	QString rawLyrics = embedded;
+	bool isTtml = looksLikeTtml(embedded);
+	bool isLrc = !isTtml && lyrics::LrcParser::looksLikeLrc(embedded);
+
 	const QString sidecar = sidecarPath(path);
 	if (!sidecar.isEmpty()) {
 		QFile file(sidecar);
 		if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-			const bool ttml = sidecar.endsWith(QLatin1String("ttml"), Qt::CaseInsensitive);
-			const QString plain = plainLyrics(QString::fromUtf8(file.readAll()), ttml);
-			if (!plain.isEmpty())
-				lyrics = plain;
+			const QString contents = QString::fromUtf8(file.readAll());
+			if (!contents.trimmed().isEmpty()) {
+				rawLyrics = contents;
+				isTtml = sidecar.endsWith(QLatin1String("ttml"), Qt::CaseInsensitive);
+				isLrc = !isTtml && (sidecar.endsWith(QLatin1String("lrc"), Qt::CaseInsensitive)
+									|| lyrics::LrcParser::looksLikeLrc(contents));
+			}
 		}
 	}
+
+	// Parse when a parser matches, otherwise fall back to plain extracted text.
+	lyrics::Lyrics document;
+	bool parsed = false;
+	if (isLrc) {
+		const lyrics::LrcParser parser;
+		lyrics::ParseResult result = parser.parse(rawLyrics.toUtf8());
+		if (result.succeeded()) {
+			document = std::move(*result.lyrics);
+			parsed = true;
+		}
+	}
+	if (!parsed)
+		document = fallbackDocument(plainLyrics(rawLyrics, isTtml), title, artist);
+	if (document.metadata().title.isEmpty())
+		document.metadata().title = title;
+	if (document.metadata().artist.isEmpty())
+		document.metadata().artist = artist;
 
 	song->setTitle(title);
 	song->setArtist(artist);
 	song->setAlbum(album);
 	song->setDuration(duration);
-	song->setLyrics(lyrics.trimmed());
-	song->setLyricsDocument(fallbackDocument(lyrics.trimmed(), title, artist));
+	song->setLyrics(plainLyrics(rawLyrics, isTtml).trimmed());
+	song->setLyricsDocument(std::move(document));
 }
 
 } // namespace

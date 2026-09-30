@@ -59,6 +59,8 @@ qt_add_qml_module(karaoke
         src/lyricsmodel.h
         src/lyricsmodel.cpp
         src/lyricsparser.h
+        src/lrcparser.h
+        src/lrcparser.cpp
         src/lyricsdocument.h
         src/lyricsdocument.cpp
         src/song.h
