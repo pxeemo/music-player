@@ -26,6 +26,8 @@ Item {
     readonly property int activeGroup: root.document ? root.document.activeGroupIndex(positionMs) : -1
     readonly property real lineSize: Math.max(20, Math.min(32, width * 0.075))
 
+    property real sizeReduce: 0.94           // how much smaller the unsung line gets
+
     onActiveGroupChanged: root.scrollToGroup(root.activeGroup)
 
     function scrollToGroup(group) {
@@ -91,8 +93,8 @@ Item {
         NumberAnimation {
             id: smoothscrolling
 
-            duration: 1000
-            easing.type: Easing.InOutQuart
+            duration: root.transitionDuration
+            easing.type: root.transitionTiming
             property: "contentY"
             target: scroller
         }
@@ -139,8 +141,18 @@ Item {
                         wrapMode: Text.Wrap
                         y: rowItem.topGap
 
+                        scale: rowItem.active ? 1.0 : root.sizeReduce
+                        transformOrigin: Item.Left
+
                         Behavior on color {
                             ColorAnimation {
+                                duration: root.transitionDuration
+                                easing.type: root.transitionTiming
+                            }
+                        }
+
+                        Behavior on scale {
+                            NumberAnimation {
                                 duration: root.transitionDuration
                                 easing.type: root.transitionTiming
                             }

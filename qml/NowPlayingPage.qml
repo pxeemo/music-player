@@ -22,7 +22,7 @@ Item {
 
     // Animated 0..1 open fractions. Driving layout from these (rather than
     // animating widths directly) keeps resizes correct.
-    property real lyricsFrac: lyricsOpen ? 1 : 0
+    property real lyricsFrac: lyricsOpen ? 3 : 0
     property real queueFrac: queueOpen ? 1 : 0
 
     readonly property real sideWidth: Math.min(380, layout.width * 0.5)
