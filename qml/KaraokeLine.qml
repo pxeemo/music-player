@@ -40,10 +40,8 @@ Item {
     property color baseColor: "#9b9ba4"      // not sung yet
     property color sungColor: "#ffffff"      // the part that has been sung
     property color glowColor: "#ffd9ec"      // bright band at the playhead
-    property real edge: 0.03                 // soft boundary, in line widths
+    property real edge: 0.05                 // soft boundary, in line widths
     property real glow: 0.55                 // strength of the bright band
-    property real inactiveDim: 0.5           // dimming of the non-active lines
-    property real activeDim: 1.0             // dimming of the line being sung
     property real sizeReduce: 0.94           // how much smaller the unsung line gets
     property int transitionDuration: 1000    // ms for the activate/deactivate tween
     property int transitionTiming: Easing.InOutQuart
@@ -63,7 +61,8 @@ Item {
     // These flip the instant `active` changes; the Behaviors below tween them,
     // so a line fades up and grows when it starts being sung, then fades back
     // down and shrinks once the next line takes over - no colour or size snap.
-    property real dim: active ? activeDim : inactiveDim
+    property real inactiveDim: 0.6
+    property real dim: active ? 1.0 : inactiveDim
 
     scale: active ? 1.0 : sizeReduce
     transformOrigin: root.rtl ? Item.Right : Item.Left
@@ -192,6 +191,7 @@ Item {
         property real progress: root.progress
         property real edge: root.edge
         property real dim: root.dim
+        property real inactiveDim: root.inactiveDim
         property real glow: root.glow
         property color baseColor: root.baseColor
         property color sungColor: root.sungColor

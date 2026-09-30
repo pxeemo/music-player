@@ -19,6 +19,7 @@ layout(std140, binding = 0) uniform buf {
     float progress;     // 0..1 reading-order highlight position
     float edge;         // width of the soft boundary, in line widths
     float dim;          // 1 = active line, <1 = dimmed inactive line
+    float inactiveDim;  // the minimum of dim can get
     float glow;         // strength of the bright band at the playhead
     vec4  baseColor;    // colour of the part that has not been sung yet
     vec4  sungColor;    // colour of the part that has been sung
@@ -52,9 +53,10 @@ void main()
     }
 
     vec3 rgb = mix(sung, baseColor.rgb, unsung);
+    float opacity = mix(dim, inactiveDim, unsung);
 
     // Keep the glyph alpha so only text pixels are affected, and output
     // premultiplied colour as Qt Quick expects.
-    float a = txt.a * dim * qt_Opacity;
+    float a = txt.a * opacity * qt_Opacity;
     fragColor = vec4(rgb * a, a);
 }
