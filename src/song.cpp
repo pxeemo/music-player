@@ -2,19 +2,25 @@
 
 #include "lrcparser.h"
 
+#include <QBuffer>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QRegularExpression>
 #include <QStandardPaths>
 
 #include <utility>
 
+#include <taglib/attachedpictureframe.h>
 #include <taglib/audioproperties.h>
 #include <taglib/fileref.h>
 #include <taglib/flacfile.h>
+#include <taglib/flacpicture.h>
 #include <taglib/id3v2tag.h>
+#include <taglib/mp4coverart.h>
 #include <taglib/mp4file.h>
 #include <taglib/mp4item.h>
 #include <taglib/mp4tag.h>
@@ -115,6 +121,176 @@ QString embeddedLyrics(TagLib::File *file)
 	return {};
 }
 
+// Cover art pulled out of a tag, plus its mime type when the tag knows one.
+struct EmbeddedArtwork {
+	QByteArray data;
+	QString mime;
+};
+
+QString mimeFromMp4(TagLib::MP4::CoverArt::Format format)
+{
+	switch (format) {
+	case TagLib::MP4::CoverArt::JPEG:
+		return QStringLiteral("image/jpeg");
+	case TagLib::MP4::CoverArt::PNG:
+		return QStringLiteral("image/png");
+	case TagLib::MP4::CoverArt::BMP:
+		return QStringLiteral("image/bmp");
+	case TagLib::MP4::CoverArt::GIF:
+		return QStringLiteral("image/gif");
+	default:
+		return {};
+	}
+}
+
+// Pictures in an Ogg/Opus Vorbis comment are a base64-encoded FLAC picture
+// block. Decode it and let TagLib parse the block for us.
+EmbeddedArtwork xiphArtwork(TagLib::Ogg::XiphComment *comment)
+{
+	if (!comment)
+		return {};
+	const TagLib::StringList values =
+		comment->fieldListMap().value(TagLib::String("METADATA_BLOCK_PICTURE"));
+	if (values.isEmpty())
+		return {};
+	const QByteArray decoded =
+		QByteArray::fromBase64(QByteArray::fromStdString(values.front().to8Bit(true)));
+	if (decoded.isEmpty())
+		return {};
+	const TagLib::FLAC::Picture picture(TagLib::ByteVector(decoded.constData(), unsigned(decoded.size())));
+	const TagLib::ByteVector data = picture.data();
+	if (data.isEmpty())
+		return {};
+	return {QByteArray(data.data(), int(data.size())), fromTagLib(picture.mimeType())};
+}
+
+// The first embedded cover picture in the file, if any.
+EmbeddedArtwork embeddedArtwork(TagLib::File *file)
+{
+	if (!file)
+		return {};
+
+	const auto fromApic = [](TagLib::ID3v2::Tag *id3) -> EmbeddedArtwork {
+		if (!id3)
+			return {};
+		const TagLib::ID3v2::FrameList frames = id3->frameList("APIC");
+		for (const auto *frame : frames) {
+			if (const auto *picture =
+					dynamic_cast<const TagLib::ID3v2::AttachedPictureFrame *>(frame)) {
+				const TagLib::ByteVector data = picture->picture();
+				if (!data.isEmpty())
+					return {QByteArray(data.data(), int(data.size())),
+							fromTagLib(picture->mimeType())};
+			}
+		}
+		return {};
+	};
+
+	if (auto *mpeg = dynamic_cast<TagLib::MPEG::File *>(file)) {
+		if (EmbeddedArtwork art = fromApic(mpeg->ID3v2Tag()); !art.data.isEmpty())
+			return art;
+	}
+	if (auto *flac = dynamic_cast<TagLib::FLAC::File *>(file)) {
+		const auto pictures = flac->pictureList();
+		if (!pictures.isEmpty()) {
+			const TagLib::FLAC::Picture *picture = pictures.front();
+			const TagLib::ByteVector data = picture->data();
+			if (!data.isEmpty())
+				return {QByteArray(data.data(), int(data.size())), fromTagLib(picture->mimeType())};
+		}
+		if (EmbeddedArtwork art = fromApic(flac->ID3v2Tag()); !art.data.isEmpty())
+			return art;
+	}
+	if (auto *vorbis = dynamic_cast<TagLib::Ogg::Vorbis::File *>(file)) {
+		if (EmbeddedArtwork art = xiphArtwork(vorbis->tag()); !art.data.isEmpty())
+			return art;
+	}
+	if (auto *opus = dynamic_cast<TagLib::Ogg::Opus::File *>(file)) {
+		if (EmbeddedArtwork art = xiphArtwork(opus->tag()); !art.data.isEmpty())
+			return art;
+	}
+	if (auto *mp4 = dynamic_cast<TagLib::MP4::File *>(file)) {
+		if (auto *tag = mp4->tag()) {
+			const TagLib::MP4::Item item = tag->item("covr");
+			if (item.isValid()) {
+				const auto covers = item.toCoverArtList();
+				if (!covers.isEmpty()) {
+					const TagLib::MP4::CoverArt &cover = covers.front();
+					const TagLib::ByteVector data = cover.data();
+					if (!data.isEmpty())
+						return {QByteArray(data.data(), int(data.size())),
+								mimeFromMp4(cover.format())};
+				}
+			}
+		}
+	}
+	return {};
+}
+
+QString extensionForMime(const QString &mime)
+{
+	const QString lowered = mime.toLower();
+	if (lowered.contains(QLatin1String("jpeg")) || lowered.contains(QLatin1String("jpg")))
+		return QStringLiteral(".jpg");
+	if (lowered.contains(QLatin1String("png")))
+		return QStringLiteral(".png");
+	if (lowered.contains(QLatin1String("webp")))
+		return QStringLiteral(".webp");
+	if (lowered.contains(QLatin1String("gif")))
+		return QStringLiteral(".gif");
+	if (lowered.contains(QLatin1String("bmp")))
+		return QStringLiteral(".bmp");
+	return {};
+}
+
+// When the tag gives no mime type, let Qt look at the bytes.
+QString sniffImageExtension(const QByteArray &bytes)
+{
+	QBuffer buffer;
+	buffer.setData(bytes);
+	if (!buffer.open(QIODevice::ReadOnly))
+		return {};
+	QImageReader reader(&buffer);
+	reader.setDecideFormatFromContent(true);
+	const QString format = QString::fromLatin1(reader.format()).toLower();
+	if (format == QLatin1String("jpeg") || format == QLatin1String("jpg"))
+		return QStringLiteral(".jpg");
+	if (!format.isEmpty())
+		return QLatin1Char('.') + format;
+	return {};
+}
+
+// Writes the cover into the app cache and returns a file URL for the UI. Files
+// are named by content hash, so every track on an album shares one cover.
+QUrl cacheArtwork(const EmbeddedArtwork &artwork)
+{
+	if (artwork.data.isEmpty())
+		return {};
+
+	QString extension = extensionForMime(artwork.mime);
+	if (extension.isEmpty())
+		extension = sniffImageExtension(artwork.data);
+	if (extension.isEmpty())
+		return {};
+
+	const QString hash = QString::fromLatin1(
+		QCryptographicHash::hash(artwork.data, QCryptographicHash::Sha1).toHex());
+	QString directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+	if (directory.isEmpty())
+		directory = QDir::tempPath() + QStringLiteral("/karaoke");
+	directory += QStringLiteral("/artwork");
+	QDir().mkpath(directory);
+
+	const QString path = directory + QLatin1Char('/') + hash + extension;
+	if (!QFile::exists(path)) {
+		QFile file(path);
+		if (!file.open(QIODevice::WriteOnly))
+			return {};
+		file.write(artwork.data);
+	}
+	return QUrl::fromLocalFile(path);
+}
+
 // A sidecar lyric file next to the audio, if there is one.
 QString sidecarPath(const QString &audioPath)
 {
@@ -212,6 +388,7 @@ void loadSongFromFile(const QString &path, Song *song)
 	QString album;
 	qreal duration = 0.0;
 	QString embedded;
+	QUrl artwork;
 
 	if (!ref.isNull()) {
 		if (const TagLib::Tag *tag = ref.tag()) {
@@ -222,6 +399,7 @@ void loadSongFromFile(const QString &path, Song *song)
 		if (const TagLib::AudioProperties *props = ref.audioProperties())
 			duration = props->lengthInMilliseconds() / 1000.0;
 		embedded = embeddedLyrics(ref.file());
+		artwork = cacheArtwork(embeddedArtwork(ref.file()));
 	}
 
 	if (title.isEmpty() || artist.isEmpty()) {
@@ -278,6 +456,7 @@ void loadSongFromFile(const QString &path, Song *song)
 	song->setAlbum(album);
 	song->setDuration(duration);
 	song->setLyrics(plainLyrics(rawLyrics, isTtml).trimmed());
+	song->setArtworkSource(artwork);
 	song->setLyricsDocument(std::move(document));
 }
 
@@ -342,6 +521,14 @@ void Song::setLyrics(const QString &lyrics)
 		return;
 	m_lyrics = lyrics;
 	emit lyricsChanged();
+}
+
+void Song::setArtworkSource(const QUrl &source)
+{
+	if (m_artworkSource == source)
+		return;
+	m_artworkSource = source;
+	emit artworkChanged();
 }
 
 QColor Song::colorA() const

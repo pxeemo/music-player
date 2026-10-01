@@ -38,6 +38,8 @@ class Song : public QObject {
     Q_PROPERTY(bool hasLyrics READ hasLyrics NOTIFY lyricsChanged)
     Q_PROPERTY(QColor colorA READ colorA NOTIFY colorsChanged)
     Q_PROPERTY(QColor colorB READ colorB NOTIFY colorsChanged)
+    /// Cached cover image, or an empty URL when the track has no embedded art.
+    Q_PROPERTY(QUrl artworkSource READ artworkSource NOTIFY artworkChanged)
     /// The structured lyrics, already flattened for the view. Never null.
     Q_PROPERTY(LyricsDocument *document READ document CONSTANT)
 
@@ -54,6 +56,8 @@ class Song : public QObject {
     QString lyrics() const { return m_lyrics; }
     bool hasLyrics() const { return m_document && !m_document->empty(); }
 
+    QUrl artworkSource() const { return m_artworkSource; }
+
     LyricsDocument *document() const { return m_document; }
 
     // Deterministic cover colours derived from the track, so the artwork stays
@@ -67,6 +71,7 @@ class Song : public QObject {
     void setAlbum(const QString &album);
     void setDuration(qreal duration);
     void setLyrics(const QString &lyrics);
+    void setArtworkSource(const QUrl &source);
     /// Hands a parsed document to the UI. This is the seam a concrete parser
     /// fills in: build a `lyrics::Lyrics` and set it here.
     void setLyricsDocument(lyrics::Lyrics &&document);
@@ -79,6 +84,7 @@ class Song : public QObject {
     void durationChanged();
     void lyricsChanged();
     void colorsChanged();
+    void artworkChanged();
 
   private:
     QString m_filePath;
@@ -87,6 +93,7 @@ class Song : public QObject {
     QString m_album;
     QString m_lyrics;
     qreal m_duration = 0.0;
+    QUrl m_artworkSource;
     LyricsDocument *m_document = nullptr;
 };
 

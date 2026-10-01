@@ -276,6 +276,60 @@ Item {
                     }
                 }
 
+                // ---- volume ----
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 10
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#8b8b96"
+                        font.pixelSize: 12
+                        text: "Vol"
+                    }
+
+                    Item {
+                        id: volumeSlider
+
+                        anchors.verticalCenter: parent.verticalCenter
+                        height: 20
+                        width: 140
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "#23232e"
+                            height: 4
+                            radius: 2
+                            width: parent.width
+                        }
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "white"
+                            height: 4
+                            radius: 2
+                            width: parent.width * Player.volume
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+
+                            function setVolume(x) {
+                                Player.volume = Math.max(0, Math.min(1, x / width));
+                            }
+
+                            onPressed: function (mouse) {
+                                setVolume(mouse.x);
+                            }
+                            onPositionChanged: function (mouse) {
+                                if (pressed)
+                                    setVolume(mouse.x);
+                            }
+                        }
+                    }
+                }
+
                 // ---- lyrics / queue / repeat / shuffle / raw ----
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
