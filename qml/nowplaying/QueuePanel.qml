@@ -34,17 +34,27 @@ Item {
 
         delegate: Item {
             id: row
-
-            required property int index
+            
+            required property int index 
             required property var modelData
-
+            
             height: 54
             width: ListView.view.width
-
+            
             Rectangle {
                 anchors.fill: parent
                 color: row.index === Player.currentIndex ? "#20202c" : (rowMouse.containsMouse ? "#15151f" : "transparent")
                 radius: 10
+            }
+            Connections {
+                target: Player
+
+                function onCurrentIndexChanged() {
+                    list.positionViewAtIndex(
+                                Player.currentIndex,
+                                ListView.Beginning
+                                )
+                }
             }
 
             Column {
