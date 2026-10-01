@@ -9,7 +9,7 @@ import QtQuick.Controls
 // something is playing; tapping it returns to now playing.
 ApplicationWindow {
     id: window
-
+    flags: Qt.FramelessWindowHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint
     readonly property bool miniVisible: Player.currentSong !== null && stack.depth === 1
 
     color: "#08080c"
