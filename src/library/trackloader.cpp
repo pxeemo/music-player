@@ -155,26 +155,18 @@ QString mimeFromMp4(TagLib::MP4::CoverArt::Format format)
     }
 }
 
-// Pictures in an Ogg/Opus Vorbis comment are a base64-encoded FLAC picture
-// block. Decode it and let TagLib parse the block for us.
-EmbeddedArtwork xiphArtwork(TagLib::Ogg::XiphComment *comment)
+// FLAC keeps pictures in dedicated blocks; Ogg Vorbis and Opus keep them in the
+// Vorbis comment (a base64 FLAC picture block). TagLib exposes both through a
+// picture list, which is the reliable way to get them.
+EmbeddedArtwork fromPictures(const TagLib::List<TagLib::FLAC::Picture *> &pictures)
 {
-    if (!comment)
+    if (pictures.isEmpty())
         return {};
-    const TagLib::StringList values =
-        comment->fieldListMap().value(TagLib::String("METADATA_BLOCK_PICTURE"));
-    if (values.isEmpty())
-        return {};
-    const QByteArray decoded =
-        QByteArray::fromBase64(QByteArray::fromStdString(values.front().to8Bit(true)));
-    if (decoded.isEmpty())
-        return {};
-    const TagLib::FLAC::Picture picture(
-        TagLib::ByteVector(decoded.constData(), unsigned(decoded.size())));
-    const TagLib::ByteVector data = picture.data();
+    const TagLib::FLAC::Picture *picture = pictures.front();
+    const TagLib::ByteVector data = picture->data();
     if (data.isEmpty())
         return {};
-    return {QByteArray(data.data(), int(data.size())), fromTagLib(picture.mimeType())};
+    return {QByteArray(data.data(), int(data.size())), fromTagLib(picture->mimeType())};
 }
 
 // The first embedded cover picture in the file, if any.
@@ -204,23 +196,22 @@ EmbeddedArtwork embeddedArtwork(TagLib::File *file)
             return art;
     }
     if (auto *flac = dynamic_cast<TagLib::FLAC::File *>(file)) {
-        const auto pictures = flac->pictureList();
-        if (!pictures.isEmpty()) {
-            const TagLib::FLAC::Picture *picture = pictures.front();
-            const TagLib::ByteVector data = picture->data();
-            if (!data.isEmpty())
-                return {QByteArray(data.data(), int(data.size())), fromTagLib(picture->mimeType())};
-        }
+        if (EmbeddedArtwork art = fromPictures(flac->pictureList()); !art.data.isEmpty())
+            return art;
         if (EmbeddedArtwork art = fromApic(flac->ID3v2Tag()); !art.data.isEmpty())
             return art;
     }
     if (auto *vorbis = dynamic_cast<TagLib::Ogg::Vorbis::File *>(file)) {
-        if (EmbeddedArtwork art = xiphArtwork(vorbis->tag()); !art.data.isEmpty())
-            return art;
+        if (TagLib::Ogg::XiphComment *tag = vorbis->tag()) {
+            if (EmbeddedArtwork art = fromPictures(tag->pictureList()); !art.data.isEmpty())
+                return art;
+        }
     }
     if (auto *opus = dynamic_cast<TagLib::Ogg::Opus::File *>(file)) {
-        if (EmbeddedArtwork art = xiphArtwork(opus->tag()); !art.data.isEmpty())
-            return art;
+        if (TagLib::Ogg::XiphComment *tag = opus->tag()) {
+            if (EmbeddedArtwork art = fromPictures(tag->pictureList()); !art.data.isEmpty())
+                return art;
+        }
     }
     if (auto *mp4 = dynamic_cast<TagLib::MP4::File *>(file)) {
         if (auto *tag = mp4->tag()) {

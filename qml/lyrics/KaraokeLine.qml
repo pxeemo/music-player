@@ -105,9 +105,17 @@ Item {
                 model: root.words
 
                 Text {
+                    id: wordText
+
                     required property var modelData
 
-                    text: modelData ? modelData.text : ""
+                    // A word wider than the line is broken so it cannot
+                    // overflow; every other word keeps its natural width. The
+                    // comparison uses the Text's own implicit width, so a word
+                    // is never sized a fraction short (which would wrap its last
+                    // glyph onto a line of its own).
+                    readonly property bool tooWide: root.wrapWidth > 0 && flow.width > 0 && implicitWidth > flow.width + 0.5
+
                     color: root.baseColor
                     // Rebuilt from the animated pixelSize so the glyphs are
                     // re-rasterised crisp at every size instead of being scaled.
@@ -116,6 +124,9 @@ Item {
                         weight: root.textFont.weight,
                         pixelSize: root.textFont.pixelSize
                     })
+                    text: modelData ? modelData.text : ""
+                    width: tooWide ? flow.width : implicitWidth
+                    wrapMode: Text.WrapAnywhere
                 }
             }
         }

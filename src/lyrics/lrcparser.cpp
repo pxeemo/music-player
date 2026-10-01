@@ -39,6 +39,15 @@ bool parseTimestamp(const QString &value, qint64 *out)
     return true;
 }
 
+// Some files prefix a line with the vocalist, e.g. "v1:" or "v2:".
+QString stripVocalist(QString text)
+{
+    static const QRegularExpression re(QStringLiteral("^\\s*v\\d+\\s*:\\s*"),
+                                       QRegularExpression::CaseInsensitiveOption);
+    text.remove(re);
+    return text;
+}
+
 // Removes enhanced-LRC `<mm:ss.xx>` tags so the line reads as plain text.
 QString stripWordTags(QString text)
 {
@@ -50,64 +59,139 @@ QString stripWordTags(QString text)
     return text.trimmed();
 }
 
-// Splits enhanced-LRC text into words whose starts come from `<mm:ss.xx>` tags.
-// A tag also closes the previous word and extends the line's end. Returns the
-// (possibly updated) line end, in milliseconds.
-qint64 buildWords(Line &line, const QString &text, qint64 lineStart, qint64 lineEnd, qint64 offset)
+struct Fragment {
+    QString text;
+    qint64 start = -1;
+    qint64 end = -1;
+    bool newWord = false;
+};
+
+// Parses enhanced-LRC word fragments. `<mm:ss.xx>` tags mark a boundary: they
+// close the previous fragment and open the next. Fragments with no whitespace
+// between them are syllables of one word (the tags are removed, so scripts that
+// join - Arabic, Persian - stay connected); whitespace starts a new word.
+//
+// Returns the line's end in ms, or -1 when the line has no word timing at all.
+qint64 parseWords(Line &line, const QString &text, qint64 lineStart, qint64 fallbackEnd,
+                  qint64 offset)
 {
-    static const QRegularExpression token(
-        QStringLiteral("<\\s*\\d{1,3}:\\d{1,2}(?:[.:]\\d{1,3})?\\s*>|[^\\s<]+"));
-    static const QRegularExpression tag(QStringLiteral("^<\\s*(.*?)\\s*>$"));
+    static const QRegularExpression tokenRe(
+        QStringLiteral("(\\s*)(<\\s*\\d{1,3}:\\d{1,2}(?:[.:]\\d{1,3})?\\s*>|[^\\s<]+)"));
+    static const QRegularExpression tagRe(QStringLiteral("^<\\s*(.*?)\\s*>$"));
 
-    struct WordTiming {
-        QString text;
-        qint64 start;
-        qint64 end;
-    };
+    QVector<Fragment> fragments;
+    qint64 nextStart = -1;
+    qint64 lastTag = -1;
+    bool boundary = false;
 
-    QVector<WordTiming> words;
-    qint64 timestamp = -1;
+    QRegularExpressionMatchIterator it = tokenRe.globalMatch(text);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        const bool hadSpace = !match.captured(1).isEmpty();
+        const QString token = match.captured(2);
 
-    QRegularExpressionMatchIterator matches = token.globalMatch(text);
-    while (matches.hasNext()) {
-        const QRegularExpressionMatch match = matches.next();
-        const QString tokenText = match.captured(0);
-
-        if (tokenText.startsWith(QLatin1Char('<'))) {
-            const QRegularExpressionMatch tagMatch = tag.match(tokenText);
+        if (token.startsWith(QLatin1Char('<'))) {
+            const QRegularExpressionMatch tagMatch = tagRe.match(token);
             qint64 parsed = 0;
             if (tagMatch.hasMatch() && parseTimestamp(tagMatch.captured(1), &parsed)) {
-                timestamp = qMax<qint64>(0, parsed + offset);
-                lineEnd = timestamp;
-                if (!words.isEmpty() && words.back().end == 0)
-                    words.back().end = timestamp;
+                const qint64 time = qMax<qint64>(0, parsed + offset);
+                if (!fragments.isEmpty() && fragments.back().end < 0)
+                    fragments.back().end = time;
+                nextStart = time;
+                lastTag = time;
+                boundary = boundary || hadSpace;
             }
             continue;
         }
 
-        if (timestamp < 0)
-            continue;
-
-        words.append({.text = tokenText, .start = timestamp, .end = 0});
-        timestamp = -1;
+        Fragment fragment;
+        fragment.text = token;
+        fragment.start = nextStart;
+        fragment.newWord = fragments.isEmpty() || hadSpace || boundary;
+        fragments.append(fragment);
+        nextStart = -1;
+        boundary = false;
     }
 
-    if (words.isEmpty())
-        return lineEnd;
+    if (fragments.isEmpty() || lastTag < 0)
+        return -1;
+
+    // A tag directly after the last fragment gives the true end; otherwise the
+    // line runs until the next one (the caller's fallback).
+    const qint64 knownEnd = fragments.back().end;
+    const qint64 lineEnd = knownEnd >= lineStart ? knownEnd : fallbackEnd;
+
+    struct WordBuild {
+        QString text;
+        qint64 start = -1;
+        qint64 end = -1;
+        QVector<Fragment> parts;
+    };
+
+    QVector<WordBuild> words;
+    for (const Fragment &fragment : fragments) {
+        if (words.isEmpty() || fragment.newWord)
+            words.append(WordBuild{});
+        WordBuild &word = words.last();
+        word.text += fragment.text;
+        if (word.start < 0 && fragment.start >= 0)
+            word.start = fragment.start;
+        word.parts.append(fragment);
+    }
 
     qint64 cursor = lineStart;
-    line.mainVocal.words.reserve(line.mainVocal.words.size() + words.size());
-    for (WordTiming &info : words) {
-        info.start = qMax(info.start, cursor);
-        info.end = qMax(info.end, info.start);
+    for (qsizetype i = 0; i < words.size(); ++i) {
+        WordBuild &word = words[i];
+        if (word.start < 0)
+            word.start = cursor;
+        if (word.start < cursor)
+            word.start = cursor;
 
-        Word word;
-        word.text = info.text;
-        word.timing = Timing{Milliseconds(info.start), Milliseconds(info.end)};
-        line.mainVocal.words.push_back(std::move(word));
+        qint64 wordEnd = -1;
+        for (qsizetype k = 0; k < word.parts.size(); ++k) {
+            Fragment &part = word.parts[k];
+            if (part.end < 0 && k + 1 < word.parts.size() && word.parts[k + 1].start >= 0)
+                part.end = word.parts[k + 1].start;
+            wordEnd = qMax(wordEnd, part.end);
+        }
+        if (wordEnd < 0)
+            wordEnd = (i + 1 < words.size() && words[i + 1].start >= 0) ? words[i + 1].start
+                                                                        : lineEnd;
+        if (wordEnd < word.start)
+            wordEnd = word.start;
+        word.end = wordEnd;
 
-        cursor = info.end;
+        for (qsizetype k = 0; k < word.parts.size(); ++k) {
+            Fragment &part = word.parts[k];
+            if (part.start < 0)
+                part.start = word.start;
+            if (part.end < 0)
+                part.end = (k + 1 < word.parts.size() && word.parts[k + 1].start >= 0)
+                               ? word.parts[k + 1].start
+                               : word.end;
+            if (part.end < part.start)
+                part.end = part.start;
+        }
+        cursor = word.end;
     }
+
+    line.mainVocal.words.reserve(line.mainVocal.words.size() + words.size());
+    for (const WordBuild &build : words) {
+        Word word;
+        word.text = build.text;
+        word.timing = Timing{Milliseconds(build.start), Milliseconds(build.end)};
+        if (build.parts.size() > 1) {
+            word.syllables.reserve(build.parts.size());
+            for (const Fragment &part : build.parts) {
+                Syllable syllable;
+                syllable.text = part.text;
+                syllable.timing = Timing{Milliseconds(part.start), Milliseconds(part.end)};
+                word.syllables.push_back(std::move(syllable));
+            }
+        }
+        line.mainVocal.words.push_back(std::move(word));
+    }
+
     return lineEnd;
 }
 
@@ -189,7 +273,7 @@ ParseResult LrcParser::parse(const QByteArray &data) const
             }
         }
 
-        text = text.trimmed();
+        text = stripVocalist(text.trimmed());
         if (text.isEmpty())
             continue;
 
@@ -217,23 +301,23 @@ ParseResult LrcParser::parse(const QByteArray &data) const
         if (item.start < 0)
             continue;
 
-        // A line lasts until the next timed line.
-        qint64 end = -1;
+        // A line lasts until the next timed line, unless its own word tags give
+        // an earlier end.
+        qint64 nextStart = -1;
         for (qsizetype j = i + 1; j < pending.size(); ++j) {
             if (pending[j].start >= 0) {
-                end = pending[j].start;
+                nextStart = pending[j].start;
                 break;
             }
         }
+
+        const qint64 end = parseWords(line, item.text, item.start, nextStart, offset);
 
         Timing timing;
         timing.start = Milliseconds(item.start);
         if (end >= item.start)
             timing.end = Milliseconds(end);
         line.mainVocal.timing = timing;
-
-        end = buildWords(line, item.text, item.start, end, offset);
-        line.mainVocal.timing->end = Milliseconds(end);
     }
 
     return {std::move(document), {}};

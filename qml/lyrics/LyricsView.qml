@@ -29,20 +29,18 @@ Item {
     readonly property var document: root.song ? root.song.document : null
     readonly property real positionMs: Player.position * 1000
     readonly property bool timed: root.document ? root.document.timed : false
-    readonly property int activeGroup: root.document ? root.document.activeGroupIndex(positionMs + activationLeadMs) : -1
+    // The active line is picked slightly ahead of the clock so the transition
+    // finishes on the beat; the karaoke sweep still follows the real position.
+    readonly property real effectivePositionMs: positionMs + activationLeadMs
+    // Rows can overlap, and more than one can be active at once; this is the
+    // topmost one, and the view scrolls to it.
+    readonly property int firstActiveRow: root.document ? root.document.firstActiveRow(effectivePositionMs) : -1
     readonly property real lineSize: Math.max(20, Math.min(32, width * 0.075))
 
     property real sizeReduce: 0.94           // how much smaller the unsung line gets
 
-    onActiveGroupChanged: root.scrollToGroup(root.activeGroup)
-
-    function scrollToGroup(group) {
-        if (!root.document || group < 0)
-            return;
-        var rowIndex = root.document.firstRowOfGroup(group);
-        if (rowIndex >= 0)
-            scroller.centerOn(rowIndex);
-    }
+    onFirstActiveRowChanged: if (root.firstActiveRow >= 0)
+        scroller.centerOn(root.firstActiveRow)
 
     // Colour of one plain row, by kind and whether it is the current line. With
     // no timing at all every line is simply normal text.
@@ -127,7 +125,7 @@ Item {
                     required property int index
                     required property var modelData
 
-                    readonly property bool active: root.timed && root.activeGroup >= 0 && modelData.groupIndex === root.activeGroup
+                    readonly property bool active: root.timed && modelData.activeStartMs >= 0 && root.effectivePositionMs >= modelData.activeStartMs && (modelData.activeEndMs < 0 || root.effectivePositionMs < modelData.activeEndMs)
                     readonly property real textSize: modelData.isMain ? root.lineSize : (modelData.isSection ? root.lineSize * 0.6 : (modelData.isInstrumental ? root.lineSize * 0.62 : root.lineSize * 0.7))
                     readonly property real topGap: modelData.groupStart ? 18 : 4
 
@@ -144,7 +142,7 @@ Item {
                         text: rowItem.modelData.text
                         visible: !rowItem.modelData.karaoke
                         width: parent.width
-                        wrapMode: Text.Wrap
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                         y: rowItem.topGap
 
                         scale: rowItem.active ? 1.0 : root.sizeReduce

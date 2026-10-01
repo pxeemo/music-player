@@ -4,8 +4,12 @@
 // adapter flattens the ordered element list into one row per thing the view
 // draws (a main line, its backgrounds, its translations, a section, an
 // instrumental) and exposes the handful of facts a renderer needs: the text,
-// what kind of row it is, the agent, and the timing used both for "is this the
-// current line?" and for click-to-seek.
+// what kind of row it is, the agent, and the timing used both for "is this row
+// being sung?" and for click-to-seek.
+//
+// Each row carries its own [activeStartMs, activeEndMs) window, so overlapping
+// lines can be active together and a line stops being active once its own end
+// has passed (rather than lingering until the next line starts).
 //
 // Rows are immutable and rebuilt whenever a parser hands over a new document, so
 // QML only ever reads. A `LyricsDocument` owns the `lyrics::Lyrics` it was
@@ -62,10 +66,12 @@ class LyricRow : public QObject {
     Q_PROPERTY(bool isRtl READ isRtl CONSTANT)
     /// Where a click should seek to, in ms, or -1 when the row is untimed.
     Q_PROPERTY(qint64 startMs READ startMs CONSTANT)
-    /// Rows that belong to the same line share a group index.
-    Q_PROPERTY(int groupIndex READ groupIndex CONSTANT)
-    /// True for the first row of a group, so the view can space groups apart.
+    /// True for the first row of a line group, so the view can space groups.
     Q_PROPERTY(bool groupStart READ groupStart CONSTANT)
+    /// The row is being sung during [activeStartMs, activeEndMs). `activeEndMs`
+    /// of -1 means "until something else takes over". Both -1 when untimed.
+    Q_PROPERTY(qint64 activeStartMs READ activeStartMs CONSTANT)
+    Q_PROPERTY(qint64 activeEndMs READ activeEndMs CONSTANT)
     /// True when the line has word- or syllable-level timing, so the renderer
     /// should use the synced karaoke view instead of a plain line.
     Q_PROPERTY(bool karaoke READ karaoke CONSTANT)
@@ -99,8 +105,8 @@ class LyricRow : public QObject {
         qreal lineEnd = 0.0;
     };
 
-    LyricRow(Kind kind, QString text, QString agentName, qint64 startMs, qint64 groupStartMs,
-             int groupIndex, bool groupStart, Timed timed, QObject *parent = nullptr);
+    LyricRow(Kind kind, QString text, QString agentName, qint64 startMs, qint64 activeStartMs,
+             qint64 activeEndMs, bool groupStart, Timed timed, QObject *parent = nullptr);
 
     Kind kind() const { return m_kind; }
     QString text() const { return m_text; }
@@ -114,10 +120,9 @@ class LyricRow : public QObject {
     bool isRtl() const { return m_isRtl; }
 
     qint64 startMs() const { return m_startMs; }
-    int groupIndex() const { return m_groupIndex; }
     bool groupStart() const { return m_groupStart; }
-    /// Start of the whole group, used to pick the active line; -1 when untimed.
-    qint64 groupStartMs() const { return m_groupStartMs; }
+    qint64 activeStartMs() const { return m_activeStartMs; }
+    qint64 activeEndMs() const { return m_activeEndMs; }
 
     bool karaoke() const { return m_karaoke; }
     QQmlListProperty<TimedWord> words() { return QQmlListProperty<TimedWord>(this, &m_words); }
@@ -129,8 +134,8 @@ class LyricRow : public QObject {
     QString m_text;
     QString m_agentName;
     qint64 m_startMs;
-    qint64 m_groupStartMs;
-    int m_groupIndex;
+    qint64 m_activeStartMs;
+    qint64 m_activeEndMs;
     bool m_groupStart;
     bool m_isRtl = false;
     bool m_karaoke = false;
@@ -165,11 +170,9 @@ class LyricsDocument : public QObject {
     bool timed() const { return m_timed; }
     QString debugText() const;
 
-    Q_INVOKABLE LyricRow *rowAt(int index) const;
-    /// Group index of the last group that has started at `positionMs`, or -1.
-    Q_INVOKABLE int activeGroupIndex(qint64 positionMs) const;
-    /// Row index of a group's first row, or -1.
-    Q_INVOKABLE int firstRowOfGroup(int groupIndex) const;
+    /// Index of the first row being sung at `positionMs`, or -1. Rows are in
+    /// document order, so this is the topmost active line.
+    Q_INVOKABLE int firstActiveRow(qint64 positionMs) const;
 
   signals:
     void rowsChanged();
@@ -177,7 +180,7 @@ class LyricsDocument : public QObject {
   private:
     void rebuild();
     LyricRow *addRow(LyricRow::Kind kind, const QString &text, const QString &agentName,
-                     qint64 startMs, qint64 groupStartMs, int groupIndex, bool groupStart,
+                     qint64 startMs, qint64 activeStartMs, qint64 activeEndMs, bool groupStart,
                      LyricRow::Timed timed = {});
     QString agentName(lyrics::Id id) const;
 
