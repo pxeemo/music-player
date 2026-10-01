@@ -476,6 +476,17 @@ void loadTrack(const QString &path, Song *song)
     song->setAlbum(album);
     song->setDuration(duration);
     song->setArtworkSource(artwork);
+
+    // "Modified" is the file's mtime; "added" prefers the creation time, which
+    // is when the file appeared in the music folder.
+    song->setModifiedTime(info.lastModified());
+    QDateTime added = info.birthTime();
+    if (!added.isValid())
+        added = info.metadataChangeTime();
+    if (!added.isValid())
+        added = info.lastModified();
+    song->setAddedTime(added);
+
     song->setLyricsDocument(buildDocument(rawLyrics, isTtml, isLrc, title, artist));
 }
 

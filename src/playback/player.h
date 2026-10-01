@@ -95,6 +95,7 @@ class Player : public QObject {
     void loadCurrent();
     void stopInternal();
     void advance(bool automatic);
+    void shuffleQueue();
     void poll();
     void updatePosition();
     void updateDuration();
@@ -103,7 +104,8 @@ class Player : public QObject {
     GstBus *m_bus = nullptr;
     QTimer m_pollTimer;
 
-    QList<Song *> m_queue;
+    QList<Song *> m_queue;         // the order actually played
+    QList<Song *> m_originalQueue; // the unshuffled order, for when shuffle is off
     int m_index = -1;
     RepeatMode m_repeat = RepeatOff;
     bool m_shuffle = false;

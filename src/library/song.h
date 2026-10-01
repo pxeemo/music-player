@@ -9,6 +9,7 @@
 #include "lyrics/lyricsdocument.h"
 
 #include <QColor>
+#include <QDateTime>
 #include <QObject>
 #include <QString>
 #include <QUrl>
@@ -43,6 +44,10 @@ class Song : public QObject {
     qreal duration() const { return m_duration; }
     QUrl artworkSource() const { return m_artworkSource; }
 
+    /// File timestamps, used by the library's sorting options.
+    QDateTime modifiedTime() const { return m_modifiedTime; }
+    QDateTime addedTime() const { return m_addedTime; }
+
     LyricsDocument *document() const { return m_document; }
 
     // Deterministic cover colours derived from the track, so the fallback
@@ -56,6 +61,8 @@ class Song : public QObject {
     void setAlbum(const QString &album);
     void setDuration(qreal duration);
     void setArtworkSource(const QUrl &source);
+    void setModifiedTime(const QDateTime &time) { m_modifiedTime = time; }
+    void setAddedTime(const QDateTime &time) { m_addedTime = time; }
     /// Hands a parsed document to the UI.
     void setLyricsDocument(lyrics::Lyrics &&document);
 
@@ -75,5 +82,7 @@ class Song : public QObject {
     QString m_album;
     qreal m_duration = 0.0;
     QUrl m_artworkSource;
+    QDateTime m_modifiedTime;
+    QDateTime m_addedTime;
     LyricsDocument *m_document = nullptr;
 };

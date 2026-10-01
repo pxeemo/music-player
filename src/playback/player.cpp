@@ -67,7 +67,27 @@ void Player::setShuffle(bool shuffle)
     if (m_shuffle == shuffle)
         return;
     m_shuffle = shuffle;
+
+    // Shuffle rearranges the queue itself, keeping the current track playing;
+    // turning it off restores the original order.
+    if (!m_originalQueue.isEmpty()) {
+        Song *current = currentSong();
+        m_queue = m_originalQueue;
+        if (m_shuffle)
+            shuffleQueue();
+        const int index = current ? m_queue.indexOf(current) : -1;
+        m_index = index;
+        emit queueChanged();
+        emit currentIndexChanged();
+    }
+
     emit shuffleChanged();
+}
+
+void Player::shuffleQueue()
+{
+    for (int i = m_queue.size() - 1; i > 0; --i)
+        m_queue.swapItemsAt(i, QRandomGenerator::global()->bounded(i + 1));
 }
 
 void Player::playFromLibrary(int libraryIndex)
@@ -76,12 +96,21 @@ void Player::playFromLibrary(int libraryIndex)
     if (!library)
         return;
 
-    m_queue = library->songList();
+    const QList<Song *> &songs = library->songList();
+    Song *chosen =
+        (libraryIndex >= 0 && libraryIndex < songs.size()) ? songs.at(libraryIndex) : nullptr;
+
+    m_originalQueue = songs;
+    m_queue = m_originalQueue;
+    if (m_shuffle)
+        shuffleQueue();
     emit queueChanged();
 
     if (m_queue.isEmpty())
         return;
-    playAt(qBound(0, libraryIndex, m_queue.size() - 1));
+
+    const int index = chosen ? m_queue.indexOf(chosen) : 0;
+    playAt(index >= 0 ? index : 0);
 }
 
 void Player::playQueueIndex(int queueIndex)
@@ -167,22 +196,17 @@ void Player::advance(bool automatic)
         return;
     }
 
+    // The queue is already in play order (shuffled when shuffle is on), so next
+    // is simply the following entry.
     const int count = m_queue.size();
-    int next = -1;
-    if (m_shuffle && count > 1) {
-        do {
-            next = QRandomGenerator::global()->bounded(count);
-        } while (next == m_index);
-    } else {
-        next = m_index + 1;
-        if (next >= count) {
-            if (m_repeat == RepeatAll) {
-                next = 0;
-            } else {
-                if (automatic)
-                    setPlaying(false);
-                return;
-            }
+    int next = m_index + 1;
+    if (next >= count) {
+        if (m_repeat == RepeatAll) {
+            next = 0;
+        } else {
+            if (automatic)
+                setPlaying(false);
+            return;
         }
     }
     playAt(next);
@@ -203,20 +227,13 @@ void Player::previous()
         return;
     }
     const int count = m_queue.size();
-    int previousIndex = -1;
-    if (m_shuffle && count > 1) {
-        do {
-            previousIndex = QRandomGenerator::global()->bounded(count);
-        } while (previousIndex == m_index);
-    } else {
-        previousIndex = m_index - 1;
-        if (previousIndex < 0) {
-            if (m_repeat == RepeatAll)
-                previousIndex = count - 1;
-            else {
-                seek(0.0);
-                return;
-            }
+    int previousIndex = m_index - 1;
+    if (previousIndex < 0) {
+        if (m_repeat == RepeatAll) {
+            previousIndex = count - 1;
+        } else {
+            seek(0.0);
+            return;
         }
     }
     playAt(previousIndex);

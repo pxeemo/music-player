@@ -2,10 +2,10 @@ pragma ComponentBehavior: Bound
 
 import Karaoke 1.0
 import QtQuick
+import QtQuick.Controls
 
-// The landing page: every track MusicLibrary found, in the order it scanned
-// them. Tapping a row starts a library queue at that track and opens the
-// now-playing screen.
+// The landing page: every track MusicLibrary found, as a filtered/sorted view.
+// Tapping a row starts a queue at that track and opens the now-playing screen.
 Item {
     id: page
 
@@ -52,9 +52,64 @@ Item {
         color: "#5c5c68"
         elide: Text.ElideLeft
         font.pixelSize: 12
+        horizontalAlignment: Text.AlignRight
         text: MusicLibrary.folder
         width: parent.width * 0.5
-        horizontalAlignment: Text.AlignRight
+    }
+
+    // ---- sort + search ---------------------------------------------------
+    Row {
+        id: controls
+
+        anchors.left: parent.left
+        anchors.leftMargin: 48
+        anchors.right: parent.right
+        anchors.rightMargin: 48
+        anchors.top: subtitle.bottom
+        anchors.topMargin: 22
+        spacing: 12
+
+        ComboBox {
+            id: sortBox
+
+            model: ["Modified date", "Modified date (reverse)", "Add date", "Add date (reverse)", "Title", "Title (reverse)", "Artist", "Artist (reverse)", "Album", "Album (reverse)"]
+            width: 210
+
+            // Both directions: show the current order, and apply taps.
+            Binding {
+                property: "currentIndex"
+                target: sortBox
+                value: MusicLibrary.sortOrder
+            }
+
+            onActivated: MusicLibrary.sortOrder = currentIndex
+
+            palette.base: "#15151f"
+            palette.button: "#15151f"
+            palette.buttonText: "#d6d6de"
+            palette.highlight: "#2a2a3a"
+            palette.highlightedText: "white"
+            palette.text: "#d6d6de"
+            palette.window: "#15151f"
+            palette.windowText: "#d6d6de"
+        }
+
+        TextField {
+            id: search
+
+            color: "#d6d6de"
+            placeholderText: "Search title, artist or album"
+            placeholderTextColor: "#6a6a76"
+            selectByMouse: true
+            width: 300
+
+            onTextChanged: MusicLibrary.filterText = text
+
+            palette.base: "#15151f"
+            palette.highlight: "#2a2a3a"
+            palette.highlightedText: "white"
+            palette.text: "#d6d6de"
+        }
     }
 
     ListView {
@@ -63,8 +118,8 @@ Item {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: heading.bottom
-        anchors.topMargin: 44
+        anchors.top: controls.bottom
+        anchors.topMargin: 18
         clip: true
         model: MusicLibrary.songs
         spacing: 6
@@ -75,6 +130,8 @@ Item {
             required property int index
             required property var modelData
 
+            readonly property bool current: modelData !== null && modelData === Player.currentSong
+
             height: 76
             width: ListView.view.width
 
@@ -82,7 +139,7 @@ Item {
                 anchors.fill: parent
                 anchors.leftMargin: 40
                 anchors.rightMargin: 40
-                color: row.index === Player.currentIndex && Player.currentSong ? "#15151f" : (rowMouse.containsMouse ? "#15151f" : "transparent")
+                color: row.current ? "#15151f" : (rowMouse.containsMouse ? "#15151f" : "transparent")
                 radius: 14
             }
 
@@ -150,5 +207,13 @@ Item {
                 }
             }
         }
+    }
+
+    Text {
+        anchors.centerIn: parent
+        color: "#5c5c68"
+        font.pixelSize: 15
+        text: "No matching songs"
+        visible: !MusicLibrary.scanning && MusicLibrary.count === 0 && MusicLibrary.filterText.length > 0
     }
 }
