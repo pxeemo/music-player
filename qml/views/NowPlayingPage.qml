@@ -379,7 +379,11 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Player.toggleShuffle()
+                            onClicked: {
+                                Player.toggleShuffle();
+                                
+                                
+                            }
                         }
                     }
 
