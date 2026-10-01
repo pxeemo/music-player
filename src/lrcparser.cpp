@@ -53,60 +53,89 @@ QString stripWordTags(QString text)
 // Splits enhanced-LRC text into words with starts taken from `<mm:ss.xx>` tags.
 // Words that carry no tag inherit the previous word's end. Ends are filled in
 // afterwards (next word, or the line end).
-void buildWords(Line &line, const QString &text, qint64 lineStart, qint64 lineEnd, qint64 offset)
+qint64 buildWords(
+    Line &line,
+    const QString &text,
+    qint64 lineStart,
+    qint64 lineEnd,
+    qint64 offset)
 {
-	static const QRegularExpression token(
-		QStringLiteral("<\\s*\\d{1,3}:\\d{1,2}(?:[.:]\\d{1,3})?\\s*>|[^\\s<]+"));
-	static const QRegularExpression tag(QStringLiteral("^<\\s*(.*?)\\s*>$"));
+    static const QRegularExpression token(
+        QStringLiteral("<\\s*\\d{1,3}:\\d{1,2}(?:[.:]\\d{1,3})?\\s*>|[^\\s<]+"));
 
-	QVector<QString> texts;
-	QVector<qint64> starts;
-	qint64 current = -1;
-	bool sawTag = false;
+    static const QRegularExpression tag(
+        QStringLiteral("^<\\s*(.*?)\\s*>$"));
 
-	QRegularExpressionMatchIterator it = token.globalMatch(text);
-	while (it.hasNext()) {
-		const QRegularExpressionMatch match = it.next();
-		const QString tokenText = match.captured(0);
-		if (tokenText.startsWith(QLatin1Char('<'))) {
-			const QRegularExpressionMatch tagMatch = tag.match(tokenText);
-			qint64 parsed = 0;
-			if (tagMatch.hasMatch() && parseTimestamp(tagMatch.captured(1), &parsed)) {
-				current = qMax<qint64>(0, parsed + offset);
-				sawTag = true;
-			}
-			continue;
-		}
-		texts.append(tokenText);
-		starts.append(current);
-		current = -1;
-	}
+    struct WordTiming {
+        QString text;
+        qint64 start;
+        qint64 end;
+    };
 
-	if (!sawTag || texts.isEmpty())
-		return;
+    QVector<WordTiming> words;
+    qint64 timestamp = -1;
 
-	// Resolve starts: missing ones continue from the previous word.
-	qint64 cursor = lineStart;
-	for (qsizetype i = 0; i < starts.size(); ++i) {
-		if (starts[i] < 0)
-			starts[i] = cursor;
-		if (starts[i] < cursor)
-			starts[i] = cursor;
-		cursor = starts[i];
-	}
+    auto matches = token.globalMatch(text);
 
-	line.mainVocal.words.reserve(std::size_t(texts.size()));
-	for (qsizetype i = 0; i < texts.size(); ++i) {
-		const qint64 end = (i + 1 < starts.size()) ? starts[i + 1] : lineEnd;
-		Word word;
-		word.text = texts[i];
-		Timing timing;
-		timing.start = Milliseconds(starts[i]);
-		if (end >= starts[i])
-			timing.end = Milliseconds(end);
-		word.timing = timing;
-		line.mainVocal.words.push_back(std::move(word));
-	}
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        const QString tokenText = match.captured(0);
+
+        if (tokenText.startsWith(QLatin1Char('<'))) {
+            const auto tagMatch = tag.match(tokenText);
+
+            qint64 parsed = 0;
+            if (tagMatch.hasMatch() &&
+                parseTimestamp(tagMatch.captured(1), &parsed)) {
+                timestamp = qMax<qint64>(0, parsed + offset);
+                lineEnd = timestamp;
+
+                if (!words.isEmpty() && words.back().end == 0)
+                    words.back().end = timestamp;
+            }
+
+            continue;
+        }
+
+        if (timestamp < 0)
+            continue;
+
+        words.append({
+            .text = tokenText,
+            .start = timestamp,
+            .end = 0,
+        });
+
+        timestamp = -1;
+    }
+
+    if (words.isEmpty())
+        return lineEnd;
+
+    qint64 cursor = lineStart;
+
+    line.mainVocal.words.reserve(
+        line.mainVocal.words.size() + words.size());
+
+    for (auto &info : words) {
+        info.start = qMax(info.start, cursor);
+        info.end = qMax(info.end, info.start);
+
+        Word word;
+        word.text = info.text;
+
+        Timing timing;
+        timing.start = Milliseconds(info.start);
+        timing.end = Milliseconds(info.end);
+
+        word.timing = timing;
+
+        line.mainVocal.words.push_back(std::move(word));
+
+        cursor = info.end;
+    }
+
+    return lineEnd;
 }
 
 } // namespace
@@ -230,7 +259,8 @@ ParseResult LrcParser::parse(const QByteArray &data) const
 			timing.end = Milliseconds(end);
 		line.mainVocal.timing = timing;
 
-		buildWords(line, item.text, item.start, end, offset);
+		end = buildWords(line, item.text, item.start, end, offset);
+		line.mainVocal.timing->end = Milliseconds(end);
 	}
 
 	return {std::move(document), {}};
