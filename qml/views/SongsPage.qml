@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import Karaoke 1.0
 import QtQuick
-import QtQuick.Controls
 
 // The landing page: every track MusicLibrary found, in the order it scanned
 // them. Tapping a row starts a library queue at that track and opens the

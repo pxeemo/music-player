@@ -1,9 +1,8 @@
-// lyricsmodel.h - a format-independent lyrics document.
+// lyrics.h - the format-independent lyrics model.
 //
-// This is the structured model that concrete parsers (LRC, TTML, embedded tags,
-// ...) will eventually populate and that the renderer will read. Nothing here
-// knows about any specific source format, nor about QML, layout or playback, so
-// the same model comes out regardless of where the lyrics came from.
+// This is plain data: no QObject, no QML, no knowledge of any source format.
+// Concrete parsers (LRC, TTML, embedded tags, ...) populate it and the Qt-facing
+// LyricsDocument turns it into something the UI can bind to.
 //
 // Ownership and references
 // ------------------------
@@ -17,8 +16,8 @@
 //    gives a line's start leaves `end` empty, and a source with no timing at all
 //    leaves the whole `OptionalTiming` empty.
 //
-// Element kinds are open for extension: a new kind only needs an `ElementKind`
-// value and an `Element` subclass. `Line`, `Section` and `Instrumental` are the
+// Element kinds are open for extension: a new kind needs an `ElementKind` value
+// and an `Element` subclass. `Line`, `Section` and `Instrumental` are the
 // initial set.
 
 #pragma once
@@ -27,12 +26,10 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <qtmetamacros.h>
 #include <vector>
 
-#include <QString>
-#include <QObject>
 #include <QChar>
+#include <QString>
 
 namespace lyrics {
 
@@ -50,20 +47,22 @@ struct Timing {
     std::optional<Timestamp> end{};
 };
 
+/// Empty when the source provides no timing for this item at all.
+using OptionalTiming = std::optional<Timing>;
+
 enum class TextDirection {
     Ltr,
     Rtl,
 };
 
+/// First strong character wins; defaults to left-to-right.
 TextDirection textDirection(const QString &text);
-
-/// Empty when the source provides no timing for this item at all.
-using OptionalTiming = std::optional<Timing>;
 
 /// The smallest sung unit. Only present when the source times at this level.
 struct Syllable {
     QString text;
     OptionalTiming timing;
+
     TextDirection direction() const;
 };
 
@@ -71,8 +70,9 @@ struct Syllable {
 struct Word {
     QString text;
     OptionalTiming timing;
-    TextDirection direction() const;
     std::vector<Syllable> syllables;
+
+    TextDirection direction() const;
 };
 
 enum class AgentType {
@@ -91,16 +91,16 @@ struct Agent {
 /// A translation of the line it belongs to. Timing is inherited from the source
 /// line, so it is deliberately not stored here - only the relationship is.
 struct Translation {
-    QString language;             ///< e.g. "fa", "de", "ja"
+    QString language; ///< e.g. "fa", "de", "ja"
     QString text;
-    Id sourceLineId = InvalidId;  ///< the line this translates
+    Id sourceLineId = InvalidId; ///< the line this translates
 };
 
 /// The original lyric rendered in another writing system. This is not a
 /// translation: it represents the same words, not their meaning.
 struct Transliteration {
     QString text;
-    Id sourceId = InvalidId;      ///< the lyric (line) it transliterates
+    Id sourceId = InvalidId; ///< the lyric (line) it transliterates
 };
 
 /// A block of sung text: the main vocal of a line, or a background vocal.
@@ -110,6 +110,7 @@ struct Vocal {
     OptionalTiming timing;
     std::vector<Word> words;
     Id agentId = InvalidId;
+
     TextDirection direction() const;
 };
 
@@ -141,18 +142,16 @@ class Line : public Element {
   public:
     explicit Line(Id id) : Element(id, ElementKind::Line) {}
 
-    Vocal mainVocal;                  ///< the line itself
-    std::vector<Vocal> backgrounds;   ///< backing vocals, independent timing
+    Vocal mainVocal;                ///< the line itself
+    std::vector<Vocal> backgrounds; ///< backing vocals, independent timing
     std::vector<Translation> translations;
     std::vector<Transliteration> transliterations;
 
-    // Convenience access to the main vocal's content.
     const QString &text() const { return mainVocal.text; }
     const OptionalTiming &timing() const { return mainVocal.timing; }
 };
 
-/// A structural marker such as "Intro", "Verse 1", "Chorus", "Bridge",
-/// "Outro".
+/// A structural marker such as "Intro", "Verse 1", "Chorus", "Bridge", "Outro".
 class Section : public Element {
   public:
     explicit Section(Id id) : Element(id, ElementKind::Section) {}
@@ -166,7 +165,7 @@ class Instrumental : public Element {
   public:
     explicit Instrumental(Id id) : Element(id, ElementKind::Instrumental) {}
 
-    QString description;  ///< optional label, e.g. "guitar solo"
+    QString description; ///< optional label, e.g. "guitar solo"
     OptionalTiming timing;
 };
 
@@ -174,7 +173,7 @@ struct Metadata {
     QString title;
     QString artist;
     QString album;
-    QString language;  ///< primary language of the lyrics, if known
+    QString language; ///< primary language of the lyrics, if known
 };
 
 /// The root of a lyrics document: metadata plus the ordered element list.
@@ -217,4 +216,4 @@ class Lyrics {
     Id m_nextId = 1;
 };
 
-}  // namespace lyrics
+} // namespace lyrics

@@ -130,7 +130,7 @@ Item {
                 }
             }
 
-            QueueView {
+            QueuePanel {
                 anchors.fill: parent
 
                 onSongChosen: function (index) {
@@ -431,7 +431,7 @@ Item {
             }
 
             // Raw lyrics for debug
-            LyricsText {
+            RawLyricsView {
                 anchors.fill: parent
                 anchors.topMargin: 26
                 emptyText: "(no parsed lyrics document)"

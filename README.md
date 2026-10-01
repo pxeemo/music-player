@@ -82,20 +82,56 @@ their own smaller rows, and clicking a timed row seeks to it.
 Navigation is a single `StackView`: `SongsPage` is the root and pushes
 `NowPlayingPage`.
 
-| File | Role |
+## Project layout
+
+C++ is grouped by feature (`src/lyrics`, `src/library`, `src/playback`) and kept
+one-directional: the lyrics model and parsers are plain C++ with no QObject, the
+`LyricsDocument` adapter adds the Qt/QML layer, the library builds songs on top
+of it, and playback depends on the library. QML is grouped by role instead:
+`views/` are the screens, `components/` holds genuinely shared visual pieces, and
+feature-specific components live with their feature.
+
+```
+src/
+  main.cpp
+  lyrics/    lyrics.{h,cpp}      pure model (namespace lyrics)
+             lyricsparser.h      Parser interface
+             lrcparser.{h,cpp}   LRC implementation
+             lyricsdocument.*    Qt/QML adapter (LyricsDocument, LyricRow)
+  library/   song.{h,cpp}        one track (metadata, artwork, lyrics)
+             library.{h,cpp}     MusicLibrary scanner
+             trackloader.{h,cpp} TagLib tags/artwork + lyrics source dispatch
+  playback/  player.{h,cpp}      GStreamer playbin, queue, repeat, shuffle
+
+qml/
+  Main.qml                       window shell, navigation, mini player
+  views/       SongsPage.qml, NowPlayingPage.qml
+  components/  Artwork.qml
+  lyrics/      LyricsView.qml, KaraokeLine.qml, shaders/
+  nowplaying/  QueuePanel.qml, RawLyricsView.qml
+  playback/    MiniPlayer.qml
+```
+
+| Path | Role |
 | --- | --- |
-| `lyricsmodel.h/.cpp` | format-independent `Lyrics` model: elements, timing, agents |
-| `lyricsparser.h` | the `Parser` interface every lyric format implements |
-| `lrcparser.h/.cpp` | basic LRC parser (metadata, line + enhanced word timing) |
-| `lyricsdocument.h/.cpp` | flattens the model into rows for QML |
-| `song.h/.cpp` | `Song` (track metadata + parsed lyrics) and the `MusicLibrary` scanner |
-| `player.h/.cpp` | GStreamer playback, queue, repeat and shuffle |
-| `qml/Main.qml` | window shell, `StackView` navigation, starts the scan |
-| `qml/SongsPage.qml` | the songs list (main page) |
-| `qml/NowPlayingPage.qml` | cover, transport and the queue/lyrics panes |
-| `qml/QueueView.qml` | the play queue list |
-| `qml/LyricsView.qml` | the line-by-line / synced lyric sheet |
-| `qml/LyricsText.qml` | plain scrollable text (used for the raw parser dump) |
-| `qml/KaraokeLine.qml` | one synced line: GPU highlight sweep |
-| `qml/Artwork.qml` | a track's gradient cover |
-| `shaders/` | the GPU sweep used by `KaraokeLine` |
+| `src/lyrics/lyrics.h` | format-independent `Lyrics` model: elements, timing, agents |
+| `src/lyrics/lyricsparser.h` | the `Parser` interface every lyric format implements |
+| `src/lyrics/lrcparser.*` | basic LRC parser (metadata, line + enhanced word timing) |
+| `src/lyrics/lyricsdocument.*` | flattens the model into rows for QML |
+| `src/library/song.*` | `Song`: the data a track exposes to the UI |
+| `src/library/library.*` | `MusicLibrary` scanner (background, chunked) |
+| `src/library/trackloader.*` | tags, cover art and lyrics for one file |
+| `src/playback/player.*` | GStreamer playback, queue, repeat and shuffle |
+| `qml/Main.qml` | window shell, `StackView` navigation, mini player |
+| `qml/views/SongsPage.qml` | the songs list |
+| `qml/views/NowPlayingPage.qml` | cover, transport and the queue/lyrics panes |
+| `qml/components/Artwork.qml` | a track's cover: embedded art or gradient fallback |
+| `qml/lyrics/LyricsView.qml` | the line-by-line / synced lyric sheet |
+| `qml/lyrics/KaraokeLine.qml` | one synced line: GPU highlight sweep |
+| `qml/nowplaying/QueuePanel.qml` | the play queue list |
+| `qml/nowplaying/RawLyricsView.qml` | plain text view for the raw parser dump |
+| `qml/playback/MiniPlayer.qml` | the bottom mini player bar |
+| `qml/lyrics/shaders/` | the GPU sweep used by `KaraokeLine` |
+
+C++ is formatted with `clang-format` using the repo's `.clang-format` (Qt-style:
+4 spaces, braces on the next line for functions).

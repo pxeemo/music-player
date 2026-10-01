@@ -1,0 +1,43 @@
+# C++ formatting for this project: Qt-flavoured (4 spaces, Allman functions,
+# braces on the same line for classes and control statements).
+---
+Language: Cpp
+Standard: c++17
+BasedOnStyle: LLVM
+
+# Qt puts access specifiers at the class indentation level, not beyond it.
+AccessModifierOffset: -2
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+NamespaceIndentation: None
+
+# Qt braces: same line for classes/namespaces/control statements, next line for
+# function definitions.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+
+PointerAlignment: Right
+ReferenceAlignment: Right
+
+SortIncludes: Never
+ReflowComments: false

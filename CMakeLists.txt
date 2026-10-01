@@ -21,57 +21,78 @@ pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(karaoke
-	main.cpp
+    src/main.cpp
 )
 
-# Compile the GLSL sources to .qsb at build time instead of committing them.
-# BATCHABLE is required for vertex shaders used with Qt Quick's ShaderEffect.
-# The results are embedded as :/shaders/karaoke.vert.qsb and .frag.qsb
+# KaraokeLine's GPU sweep, compiled to .qsb at build time. The sources live next
+# to the component that uses them; PREFIX keeps the qrc paths as :/shaders/...
 qt_add_shaders(karaoke "karaoke_shaders"
-	PREFIX "/shaders"
-	BATCHABLE
-	BASE "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-	FILES
-    	shaders/karaoke.vert
-    	shaders/karaoke.frag
+    PREFIX "/shaders"
+    BATCHABLE
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml/lyrics/shaders"
+    FILES
+        qml/lyrics/shaders/karaoke.vert
+        qml/lyrics/shaders/karaoke.frag
 )
 
-# The QML files plus every C++ type marked with QML_ELEMENT().
+# The QML module: everything under `qml/`, plus the C++ types marked with
+# QML_ELEMENT(). QML files are grouped by role so the tree reads as
+# views -> feature components -> shared components.
 qt_add_qml_module(karaoke
     URI Karaoke
     VERSION 1.0
 
     QML_FILES
+        # application root
         qml/Main.qml
-        qml/SongsPage.qml
-        qml/NowPlayingPage.qml
-        qml/Artwork.qml
-        qml/LyricsText.qml
-        qml/LyricsView.qml
-        qml/KaraokeLine.qml
-        qml/MiniPlayer.qml
-        qml/QueueView.qml
+
+        # screens
+        qml/views/SongsPage.qml
+        qml/views/NowPlayingPage.qml
+
+        # shared visual components
+        qml/components/Artwork.qml
+
+        # lyrics feature
+        qml/lyrics/LyricsView.qml
+        qml/lyrics/KaraokeLine.qml
+
+        # now-playing feature
+        qml/nowplaying/QueuePanel.qml
+        qml/nowplaying/RawLyricsView.qml
+
+        # playback feature
+        qml/playback/MiniPlayer.qml
 
     SOURCES
-        src/playbackclock.h
-        src/playbackclock.cpp
-        src/lyrics.h
-        src/lyrics.cpp
-        src/lyricsmodel.h
-        src/lyricsmodel.cpp
-        src/lyricsparser.h
-        src/lrcparser.h
-        src/lrcparser.cpp
-        src/lyricsdocument.h
-        src/lyricsdocument.cpp
-        src/song.h
-        src/song.cpp
-        src/player.h
-        src/player.cpp
+        # lyrics: pure model + parsers, then the QML adapter
+        src/lyrics/lyrics.h
+        src/lyrics/lyrics.cpp
+        src/lyrics/lyricsparser.h
+        src/lyrics/lrcparser.h
+        src/lyrics/lrcparser.cpp
+        src/lyrics/lyricsdocument.h
+        src/lyrics/lyricsdocument.cpp
+
+        # library: songs, scanning and tag/artwork/lyrics loading
+        src/library/song.h
+        src/library/song.cpp
+        src/library/library.h
+        src/library/library.cpp
+        src/library/trackloader.h
+        src/library/trackloader.cpp
+
+        # playback: the GStreamer player and queue
+        src/playback/player.h
+        src/playback/player.cpp
 )
 
 target_include_directories(karaoke
-	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/lyrics
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/library
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/playback
 )
 
 target_link_libraries(karaoke PRIVATE

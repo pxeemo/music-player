@@ -1,13 +1,12 @@
 // lyricsparser.h - the boundary between external lyric formats and the model.
 //
 // A parser reads the bytes of one specific format (LRC, TTML, an embedded tag,
-// ...) and produces a `lyrics::Lyrics`. No concrete parser is provided yet:
-// this header only fixes the shape, so future parsers are interchangeable and
-// the model stays independent of any one format.
+// ...) and produces a `lyrics::Lyrics`. This header fixes the shape so parsers
+// are interchangeable and the model stays independent of any one format.
 //
 //   external format -> Parser -> lyrics::Lyrics
 //
-// A parser owns id allocation through the `Lyrics::add*` helpers, which keeps
+// A parser allocates ids through the `Lyrics::add*` helpers, which keeps
 // cross-references (agents, translation source lines, transliteration sources)
 // consistent without the parser ever handling raw pointers.
 //
@@ -23,19 +22,19 @@
 //   lyrics::Lyrics lyrics;
 //   lyrics::Line &line = lyrics.addLine();
 //   line.mainVocal.text = QStringLiteral("Hello world");
-//   line.mainVocal.timing = lyrics::Timing{ std::chrono::milliseconds(12500) };
+//   line.mainVocal.timing = lyrics::Timing{std::chrono::milliseconds(12500)};
 //
 // Enhanced LRC with word timing. Only the anchors the file gives are filled in.
 //
 //   [00:12.50]<00:12.50>Hello <00:13.10>world
 //
 //   lyrics::Line &line = lyrics.addLine();
-//   line.mainVocal.timing = lyrics::Timing{ std::chrono::milliseconds(12500) };
+//   line.mainVocal.timing = lyrics::Timing{std::chrono::milliseconds(12500)};
 //   line.mainVocal.text = QStringLiteral("Hello world");
 //   line.mainVocal.words.push_back(lyrics::Word{
-//       QStringLiteral("Hello"), lyrics::Timing{ std::chrono::milliseconds(12500) }, {} });
+//       QStringLiteral("Hello"), lyrics::Timing{std::chrono::milliseconds(12500)}, {}});
 //   line.mainVocal.words.push_back(lyrics::Word{
-//       QStringLiteral("world"), lyrics::Timing{ std::chrono::milliseconds(13100) }, {} });
+//       QStringLiteral("world"), lyrics::Timing{std::chrono::milliseconds(13100)}, {}});
 //
 // Multiple singers. Agents are registered once and referenced by id, so several
 // lines can share the same voice.
@@ -58,16 +57,16 @@
 //   lyrics::Line &line = lyrics.addLine();
 //   line.mainVocal.text = QStringLiteral("ありがとう");
 //   line.translations.push_back(lyrics::Translation{
-//       QStringLiteral("fa"), QStringLiteral("ممنون"), line.id() });
+//       QStringLiteral("fa"), QStringLiteral("ممنون"), line.id()});
 //
 // Transliteration is separate from translation and points at the original.
 //
 //   line.transliterations.push_back(lyrics::Transliteration{
-//       QStringLiteral("arigatou"), line.id() });
+//       QStringLiteral("arigatou"), line.id()});
 
 #pragma once
 
-#include "lyricsmodel.h"
+#include "lyrics.h"
 
 #include <optional>
 
@@ -98,4 +97,4 @@ class Parser {
     virtual ParseResult parse(const QByteArray &data) const = 0;
 };
 
-}  // namespace lyrics
+} // namespace lyrics

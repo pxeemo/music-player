@@ -16,7 +16,7 @@
 #include <QtQml/qqmllist.h> // QQmlListProperty
 #include <QtQml/qqmlregistration.h>
 
-#include "song.h"
+#include "library/song.h"
 
 // Opaque GStreamer pointers, so the header does not need the GStreamer headers.
 typedef struct _GstElement GstElement;
@@ -58,9 +58,7 @@ class Player : public QObject {
     int currentIndex() const { return m_index; }
     int queueCount() const { return m_queue.size(); }
     QList<Song *> &queueList() { return m_queue; }
-    QQmlListProperty<Song> queue() {
-        return QQmlListProperty<Song>(this, &m_queue);
-    }
+    QQmlListProperty<Song> queue() { return QQmlListProperty<Song>(this, &m_queue); }
     RepeatMode repeatMode() const { return m_repeat; }
     bool shuffle() const { return m_shuffle; }
     QString errorString() const { return m_error; }

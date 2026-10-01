@@ -1,21 +1,20 @@
-// lyricsdocument.h - the QML-facing view of a structured `lyrics::Lyrics`.
+// lyricsdocument.h - the Qt/QML view of a `lyrics::Lyrics`.
 //
-// The model in lyricsmodel.h is deliberately plain C++: no QObject, no QML.
-// This file adapts it for the UI. It flattens the ordered element list into a
-// row per thing the view draws (a main line, its backgrounds, its translations,
-// a section, an instrumental) and exposes the handful of facts a renderer
-// needs: the text, what kind of row it is, the agent, and the timing used both
-// for "is this the current line?" and for click-to-seek.
+// The model in lyrics.h is deliberately plain C++: no QObject, no QML. This
+// adapter flattens the ordered element list into one row per thing the view
+// draws (a main line, its backgrounds, its translations, a section, an
+// instrumental) and exposes the handful of facts a renderer needs: the text,
+// what kind of row it is, the agent, and the timing used both for "is this the
+// current line?" and for click-to-seek.
 //
-// Rows are immutable and rebuilt whenever a parser hands over a new document,
-// so QML only ever reads. Nothing here knows how to parse anything.
-//
-// A `LyricsDocument` owns the `lyrics::Lyrics` it was given, so `Song` can keep
-// one per track and replace its contents when the parser runs.
+// Rows are immutable and rebuilt whenever a parser hands over a new document, so
+// QML only ever reads. A `LyricsDocument` owns the `lyrics::Lyrics` it was
+// given, so `Song` can keep one per track and replace its contents when the
+// parser runs.
 
 #pragma once
 
-#include "lyricsmodel.h"
+#include "lyrics.h"
 
 #include <QList>
 #include <QObject>
@@ -91,6 +90,8 @@ class LyricRow : public QObject {
         qreal end = 0.0;
     };
 
+    /// Everything the karaoke renderer needs for one line, in seconds. Empty
+    /// unless the line actually carries word- or syllable-level timing.
     struct Timed {
         bool karaoke = false;
         QVector<WordSpec> words;
@@ -158,7 +159,6 @@ class LyricsDocument : public QObject {
     /// Takes ownership of `document` and rebuilds the rows.
     void setLyrics(lyrics::Lyrics &&document);
 
-    bool hasLyrics() const { return m_hasLyrics; }
     QQmlListProperty<LyricRow> rows() { return QQmlListProperty<LyricRow>(this, &m_rows); }
     int rowCount() const { return m_rows.size(); }
     bool empty() const { return m_rows.isEmpty(); }

@@ -2,21 +2,13 @@ pragma ComponentBehavior: Bound
 
 import Karaoke 1.0
 import QtQuick
-import QtQuick.Controls
 
-// The play queue. Shows the ordered list the Player will walk through, with the
-// current track highlighted; tapping a row jumps straight to it.
+// The play queue: the ordered list the Player will walk through, with the
+// current track highlighted. Tapping a row jumps straight to it.
 Item {
     id: root
 
     signal songChosen(int index)
-
-    function formatTime(seconds) {
-        var s = Math.max(0, seconds);
-        var m = Math.floor(s / 60);
-        var r = Math.floor(s % 60);
-        return m + ":" + (r < 10 ? "0" : "") + r;
-    }
 
     Text {
         id: heading

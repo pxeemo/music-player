@@ -3,15 +3,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 
-// Plain, unsynced lyrics: whatever text we extracted from a sidecar .lrc/.ttml
-// or an embedded tag. Real timing is a later phase; this just makes it readable.
+// A scrollable block of plain text. Used to show the raw parsed-lyrics dump.
 Item {
     id: root
 
     property string text
-    /// Monospaced, smaller text - used for the raw parser dump.
+    property string emptyText: "(no lyrics document)"
     property bool monospace: false
-    property string emptyText: "No lyrics available"
 
     readonly property bool empty: !text || text.length === 0
 

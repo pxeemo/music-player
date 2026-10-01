@@ -15,7 +15,7 @@ Rectangle {
 
     function openNowPlaying() {
         if (root.stackView && root.stackView.depth === 1)
-            root.stackView.push(Qt.resolvedUrl("NowPlayingPage.qml"), {
+            root.stackView.push(Qt.resolvedUrl("../views/NowPlayingPage.qml"), {
                 "stackView": root.stackView
             });
     }
