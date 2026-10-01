@@ -9,16 +9,19 @@ import QtQuick.Controls
 // something is playing; tapping it returns to now playing.
 ApplicationWindow {
     id: window
-    flags: Qt.FramelessWindowHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint
+    flags:  Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint
     readonly property bool miniVisible: Player.currentSong !== null && stack.depth === 1
-
+    
     color: "#08080c"
-    height: 640
+    height: screen.height * 0.8
     title: "Karaoke"
     visible: true
-    width: 1000
+    width: screen.width * 0.8
 
     Component.onCompleted: MusicLibrary.scan()
+
+    
+
 
     Item {
         anchors.fill: parent
