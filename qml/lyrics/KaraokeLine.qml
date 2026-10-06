@@ -30,6 +30,9 @@ Item {
     property real position: 0        // playback clock, in seconds
     property bool active: false
     property bool rtl: false
+    // Align the line to the reading end (right for LTR, left for RTL), used to
+    // put different singers on opposite sides.
+    property bool alignEnd: false
 
     // Width available for the line, in pixels. A positive value wraps the
     // words onto as many rows as needed; 0 sizes the line to its content on a
@@ -56,6 +59,17 @@ Item {
     readonly property real progress: computeProgress(position)
     // Total reading-order length of the line, used to normalise positions.
     readonly property real readingWidth: computeReadingWidth()
+    // Space left over when a single row does not fill the wrap width; used to
+    // push an end-aligned line to the opposite side.
+    readonly property real freeSpace: root.wrapWidth > 0 ? Math.max(0, root.wrapWidth - 2 * root.pad - readingWidth) : 0
+    readonly property bool singleRow: {
+        var count = wordItems.count;
+        if (count === 0)
+            return true;
+        var first = wordItems.itemAt(0);
+        return first !== null && flow.height <= first.height + 0.5;
+    }
+    readonly property real alignOffset: root.alignEnd && singleRow ? (root.rtl ? -freeSpace : freeSpace) : 0
 
     // ---- animated state ---------------------------------------------------
     // These flip the instant `active` changes; the Behaviors below tween them,
@@ -65,7 +79,7 @@ Item {
     property real dim: active ? 1.0 : inactiveDim
 
     scale: active ? 1.0 : sizeReduce
-    transformOrigin: root.rtl ? Item.Right : Item.Left
+    transformOrigin: root.alignEnd !== root.rtl ? Item.Right : Item.Left
 
     Behavior on dim {
         NumberAnimation {
@@ -96,7 +110,7 @@ Item {
             spacing: root.wordSpacing
             width: root.wrapWidth > 0 ? Math.max(1, root.wrapWidth - 2 * root.pad) : undefined
             layoutDirection: root.rtl ? Qt.RightToLeft : Qt.LeftToRight
-            x: root.pad
+            x: root.pad + root.alignOffset
             y: root.pad
 
             Repeater {
@@ -157,8 +171,8 @@ Item {
 
                 height: wordItem ? wordItem.height : 0
                 width: wordItem ? wordItem.width : 0
-                x: root.pad + (wordItem ? wordItem.x : 0)
-                y: root.pad + (wordItem ? wordItem.y : 0)
+                x: flow.x + (wordItem ? wordItem.x : 0)
+                y: flow.y + (wordItem ? wordItem.y : 0)
 
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
