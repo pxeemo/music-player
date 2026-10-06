@@ -104,14 +104,16 @@ Item {
         height: flow.height + 2 * root.pad
         width: root.wrapWidth > 0 ? root.wrapWidth : flow.implicitWidth + 2 * root.pad
 
-        Flow {
+        WordFlow {
             id: flow
 
-            spacing: root.wordSpacing
             width: root.wrapWidth > 0 ? Math.max(1, root.wrapWidth - 2 * root.pad) : undefined
-            layoutDirection: root.rtl ? Qt.RightToLeft : Qt.LeftToRight
+            wordSpacing: root.wordSpacing
             x: root.pad + root.alignOffset
             y: root.pad
+
+            rtl: root.rtl
+            horizontalAlignment: root.rtl !== root.alignEnd ? Text.AlignRight : Text.AlignLeft
 
             Repeater {
                 id: wordItems
@@ -138,6 +140,7 @@ Item {
                         weight: root.textFont.weight,
                         pixelSize: root.textFont.pixelSize
                     })
+                    lineHeight: 1.0
                     text: modelData ? modelData.text : ""
                     width: tooWide ? flow.width : implicitWidth
                     wrapMode: Text.WrapAnywhere
