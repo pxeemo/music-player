@@ -168,6 +168,7 @@ Item {
                     KaraokeLine {
                         id: karaokeLine
 
+                        width: rowItem.width
                         active: rowItem.active
                         alignEnd: rowItem.modelData.alignEnd
                         lineEnd: rowItem.modelData.lineEnd
@@ -181,7 +182,6 @@ Item {
                         transitionTiming: root.transitionTiming
                         visible: rowItem.modelData.karaoke
                         words: rowItem.modelData ? rowItem.modelData.words : []
-                        wrapWidth: rowItem.width
                         rtl: rowItem.modelData.isRtl
                         y: rowItem.topGap
                     }

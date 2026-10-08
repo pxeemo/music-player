@@ -34,11 +34,6 @@ Item {
     // put different singers on opposite sides.
     property bool alignEnd: false
 
-    // Width available for the line, in pixels. A positive value wraps the
-    // words onto as many rows as needed; 0 sizes the line to its content on a
-    // single row.
-    property real wrapWidth: 0
-
     // ---- appearance (all adjustable from QML) ----------------------------
     property color baseColor: "#9b9ba4"      // not sung yet
     property color sungColor: "#ffffff"      // the part that has been sung
@@ -59,17 +54,6 @@ Item {
     readonly property real progress: computeProgress(position)
     // Total reading-order length of the line, used to normalise positions.
     readonly property real readingWidth: computeReadingWidth()
-    // Space left over when a single row does not fill the wrap width; used to
-    // push an end-aligned line to the opposite side.
-    readonly property real freeSpace: root.wrapWidth > 0 ? Math.max(0, root.wrapWidth - 2 * root.pad - readingWidth) : 0
-    readonly property bool singleRow: {
-        var count = wordItems.count;
-        if (count === 0)
-            return true;
-        var first = wordItems.itemAt(0);
-        return first !== null && flow.height <= first.height + 0.5;
-    }
-    readonly property real alignOffset: root.alignEnd && singleRow ? (root.rtl ? -freeSpace : freeSpace) : 0
 
     // ---- animated state ---------------------------------------------------
     // These flip the instant `active` changes; the Behaviors below tween them,
@@ -102,16 +86,19 @@ Item {
         id: textItem
 
         height: flow.height + 2 * root.pad
-        width: root.wrapWidth > 0 ? root.wrapWidth : flow.implicitWidth + 2 * root.pad
+        width: root.width
 
         WordFlow {
             id: flow
 
-            width: root.wrapWidth > 0 ? Math.max(1, root.wrapWidth - 2 * root.pad) : undefined
+            width: root.width - 2 * root.pad
             wordSpacing: root.wordSpacing
-            x: root.pad + root.alignOffset
+            x: root.pad
             y: root.pad
 
+            // WordFlow does the alignment itself, per wrapped row, so the line
+            // is never offset here as well - offsetting on top of it would push
+            // an end-aligned single row out of the box on the right.
             rtl: root.rtl
             horizontalAlignment: root.rtl !== root.alignEnd ? Text.AlignRight : Text.AlignLeft
 
@@ -125,13 +112,6 @@ Item {
 
                     required property var modelData
 
-                    // A word wider than the line is broken so it cannot
-                    // overflow; every other word keeps its natural width. The
-                    // comparison uses the Text's own implicit width, so a word
-                    // is never sized a fraction short (which would wrap its last
-                    // glyph onto a line of its own).
-                    readonly property bool tooWide: root.wrapWidth > 0 && flow.width > 0 && implicitWidth > flow.width + 0.5
-
                     color: root.baseColor
                     // Rebuilt from the animated pixelSize so the glyphs are
                     // re-rasterised crisp at every size instead of being scaled.
@@ -142,7 +122,7 @@ Item {
                     })
                     lineHeight: 1.0
                     text: modelData ? modelData.text : ""
-                    width: tooWide ? flow.width : implicitWidth
+                    width: Math.min(flow.width, implicitWidth)
                     wrapMode: Text.WrapAnywhere
                 }
             }
