@@ -1,6 +1,7 @@
 #include "trackloader.h"
 
 #include "lyrics/lrcparser.h"
+#include "lyrics/ttmlparser.h"
 #include "song.h"
 
 #include <QBuffer>
@@ -308,8 +309,9 @@ QString sidecarPath(const QString &audioPath)
     return {};
 }
 
-// Turns a raw .lrc/.ttml file into something worth reading, without attempting
-// real timing. This is deliberately crude: a full TTML parser is a later phase.
+// Turns a raw lyric file into something worth reading when no parser handled
+// it, without attempting real timing. Deliberately crude: it is only reached
+// for untimed embedded text, or for a source that failed to parse.
 QString plainLyrics(const QString &raw, bool ttml)
 {
     if (ttml) {
@@ -362,9 +364,9 @@ bool looksLikeTtml(const QString &text)
     return text.trimmed().startsWith(QLatin1Char('<'));
 }
 
-// Fallback for lyric sources no parser handles yet (TTML, or untimed embedded
-// text): present the extracted plain text as one untimed lyric line per row, so
-// the view still shows something.
+// Fallback for lyric sources no parser handles yet (untimed embedded text, or
+// a file that failed to parse): present the extracted plain text as one
+// untimed lyric line per row, so the view still shows something.
 lyrics::Lyrics fallbackDocument(const QString &plain, const QString &title, const QString &artist)
 {
     lyrics::Lyrics document;
@@ -386,7 +388,13 @@ lyrics::Lyrics buildDocument(const QString &raw, bool isTtml, bool isLrc, const 
 {
     lyrics::Lyrics document;
     bool parsed = false;
-    if (isLrc) {
+    if (isTtml) {
+        const lyrics::TtmlParser parser;
+        if (lyrics::ParseResult result = parser.parse(raw.toUtf8()); result.succeeded()) {
+            document = std::move(*result.lyrics);
+            parsed = true;
+        }
+    } else if (isLrc) {
         const lyrics::LrcParser parser;
         if (lyrics::ParseResult result = parser.parse(raw.toUtf8()); result.succeeded()) {
             document = std::move(*result.lyrics);
