@@ -27,7 +27,13 @@
 #include <QtQml/qqmllist.h> // QQmlListProperty
 #include <QtQml/qqmlregistration.h>
 
-/// One timed word, in seconds, for the synced karaoke renderer.
+/// One timed fragment of a line, in seconds, for the synced karaoke renderer.
+///
+/// A fragment is normally a whole word. When the source times syllables, a
+/// word is split into one fragment per syllable so the sweep can follow the
+/// syllable timing instead of drifting evenly across the word; `continues`
+/// then marks every fragment that belongs to the word before it, so the layout
+/// glues them back together with no word gap.
 class TimedWord : public QObject {
     Q_OBJECT
     QML_ELEMENT
@@ -36,18 +42,22 @@ class TimedWord : public QObject {
     Q_PROPERTY(QString text READ text CONSTANT)
     Q_PROPERTY(qreal start READ start CONSTANT)
     Q_PROPERTY(qreal end READ end CONSTANT)
+    /// True for every fragment after the first of its word (a syllable).
+    Q_PROPERTY(bool continues READ continues CONSTANT)
 
   public:
-    TimedWord(QString text, qreal start, qreal end, QObject *parent = nullptr);
+    TimedWord(QString text, qreal start, qreal end, bool continues, QObject *parent = nullptr);
 
     QString text() const { return m_text; }
     qreal start() const { return m_start; }
     qreal end() const { return m_end; }
+    bool continues() const { return m_continues; }
 
   private:
     QString m_text;
     qreal m_start;
     qreal m_end;
+    bool m_continues;
 };
 
 /// One drawn row of a lyrics document.
@@ -79,7 +89,8 @@ class LyricRow : public QObject {
     /// True when the line has word- or syllable-level timing, so the renderer
     /// should use the synced karaoke view instead of a plain line.
     Q_PROPERTY(bool karaoke READ karaoke CONSTANT)
-    /// Word timing for the karaoke view; empty unless `karaoke` is true.
+    /// Syllable- or word-level timing for the karaoke view, one entry per
+    /// rendered fragment; empty unless `karaoke` is true.
     Q_PROPERTY(QQmlListProperty<TimedWord> words READ words CONSTANT)
     Q_PROPERTY(qreal lineStart READ lineStart CONSTANT)
     Q_PROPERTY(qreal lineEnd READ lineEnd CONSTANT)
@@ -94,10 +105,15 @@ class LyricRow : public QObject {
     };
     Q_ENUM(Kind)
 
+    /// One renderable fragment: a word, or a syllable of a word whose
+    /// syllables are all timed.
     struct WordSpec {
         QString text;
         qreal start = 0.0;
         qreal end = 0.0;
+        /// True when this fragment continues the fragment before it (the same
+        /// word), so it is drawn flush against it with no word gap.
+        bool continues = false;
     };
 
     /// Everything the karaoke renderer needs for one line, in seconds. Empty

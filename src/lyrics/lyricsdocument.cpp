@@ -23,10 +23,65 @@ qint64 timingEnd(const lyrics::OptionalTiming &timing)
     return (timing && timing->end) ? toMs(*timing->end) : -1;
 }
 
-// Best-effort word timing for one vocal. Word timing wins; a word without its
-// own timing falls back to the span of its syllables. This never invents a
-// precision the source did not provide - if nothing is timed, the result is
-// "not karaoke".
+/// True when every syllable of a word carries its own start, so the sweep can
+/// follow the syllable timing instead of drifting evenly across the word.
+bool syllablesAreTimed(const lyrics::Word &word)
+{
+    if (word.syllables.size() < 2)
+        return false;
+    for (const lyrics::Syllable &syllable : word.syllables)
+        if (!syllable.timing)
+            return false;
+    return true;
+}
+
+/// Appends one fragment per syllable of `word`, bounded by the word's own
+/// [start, end] and kept monotonic. Only the first syllable starts a word.
+void appendSyllables(LyricRow::Timed &timed, const lyrics::Word &word, qint64 wordStart,
+                     qint64 wordEnd)
+{
+    const qsizetype count = static_cast<qsizetype>(word.syllables.size());
+    QVector<qint64> starts(count, -1);
+    QVector<qint64> ends(count, -1);
+    for (qsizetype i = 0; i < count; ++i) {
+        const lyrics::Syllable &syllable = word.syllables[static_cast<std::size_t>(i)];
+        starts[i] = timingStart(syllable.timing);
+        ends[i] = timingEnd(syllable.timing);
+    }
+
+    qint64 previous = wordStart;
+    for (qsizetype i = 0; i < count; ++i) {
+        qint64 start = starts[i];
+        if (start < wordStart)
+            start = wordStart;
+        if (start < previous)
+            start = previous;
+        if (start > wordEnd)
+            start = wordEnd;
+
+        qint64 end = ends[i];
+        if (end < 0) // no end of its own: runs until the next syllable starts
+            end = (i + 1 < count && starts[i + 1] >= 0) ? starts[i + 1] : wordEnd;
+        if (end < start)
+            end = start;
+        if (end > wordEnd)
+            end = wordEnd;
+        if (i + 1 == count)
+            end = wordEnd; // close the word exactly
+
+        timed.words.append(LyricRow::WordSpec{word.syllables[static_cast<std::size_t>(i)].text,
+                                              start / 1000.0, end / 1000.0, i > 0});
+        previous = end;
+    }
+}
+
+// Appends the timed fragments of one vocal, in reading order. Word timing
+// wins; a word without its own timing falls back to the span of its syllables.
+// When a word's syllables are each timed they become separate fragments, so
+// the sweep follows syllable timing - `continues` marks all but the first, so
+// the renderer glues them back into one word. This never invents a precision
+// the source did not provide: if nothing is timed, the result is "not
+// karaoke".
 LyricRow::Timed buildTimed(const lyrics::Vocal &vocal, qint64 lineStartMs, qint64 lineEndMs)
 {
     const qsizetype count = static_cast<qsizetype>(vocal.words.size());
@@ -91,10 +146,15 @@ LyricRow::Timed buildTimed(const lyrics::Vocal &vocal, qint64 lineStartMs, qint6
     timed.karaoke = true;
     timed.lineStart = lineStart / 1000.0;
     timed.lineEnd = lineEnd / 1000.0;
-    timed.words.reserve(count);
+    timed.words.reserve(count * 2);
     for (qsizetype i = 0; i < count; ++i) {
-        timed.words.append(LyricRow::WordSpec{vocal.words[static_cast<std::size_t>(i)].text,
-                                              start[i] / 1000.0, end[i] / 1000.0});
+        const lyrics::Word &word = vocal.words[static_cast<std::size_t>(i)];
+        if (syllablesAreTimed(word)) {
+            appendSyllables(timed, word, start[i], end[i]);
+            continue;
+        }
+        timed.words.append(
+            LyricRow::WordSpec{word.text, start[i] / 1000.0, end[i] / 1000.0, false});
     }
     return timed;
 }
@@ -147,8 +207,8 @@ struct Window {
 // TimedWord
 // ---------------------------------------------------------------------------
 
-TimedWord::TimedWord(QString text, qreal start, qreal end, QObject *parent)
-    : QObject(parent), m_text(std::move(text)), m_start(start), m_end(end)
+TimedWord::TimedWord(QString text, qreal start, qreal end, bool continues, QObject *parent)
+    : QObject(parent), m_text(std::move(text)), m_start(start), m_end(end), m_continues(continues)
 {}
 
 // ---------------------------------------------------------------------------
@@ -166,7 +226,7 @@ LyricRow::LyricRow(Kind kind, QString text, QString agentName, bool agentIsGroup
     m_isRtl = lyrics::textDirection(m_text) == lyrics::TextDirection::Rtl;
     m_words.reserve(timed.words.size());
     for (const WordSpec &spec : timed.words)
-        m_words.append(new TimedWord(spec.text, spec.start, spec.end, this));
+        m_words.append(new TimedWord(spec.text, spec.start, spec.end, spec.continues, this));
 }
 
 // ---------------------------------------------------------------------------

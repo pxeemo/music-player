@@ -381,8 +381,8 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 Player.toggleShuffle();
-                                
-                                
+
+
                             }
                         }
                     }

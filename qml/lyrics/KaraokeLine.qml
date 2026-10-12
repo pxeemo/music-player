@@ -23,7 +23,9 @@ Item {
     id: root
 
     // ---- supplied by the view -------------------------------------------
-    // Word timing for a synced line. Items expose `text`, `start` and `end`.
+    // Timed fragments for a synced line, in reading order. Items expose
+    // `text`, `start`, `end` and `continues` (true for a syllable that belongs
+    // to the word before it, so it is drawn flush against it).
     property var words: []
     property real lineStart: 0
     property real lineEnd: 0
@@ -78,7 +80,8 @@ Item {
         }
     }
 
-    width: textItem.width
+    // The view supplies the width (one lyric column); the height follows the
+    // laid out content.
     height: textItem.height
 
     // ---- the text itself -------------------------------------------------
@@ -110,7 +113,27 @@ Item {
                 Text {
                     id: wordText
 
+                    required property int index
                     required property var modelData
+
+                    // A syllable is its own text object so the sweep can follow
+                    // its timing; WordFlow glues it to the word before it, so it
+                    // is drawn flush with no gap.
+                    property bool continues: modelData.continues
+
+                    // True when the next fragment is a syllable of this one, so
+                    // this text ends with a joiner. Read from the model rather
+                    // than from the sibling item: while the delegates are being
+                    // created the next one does not exist yet.
+                    property bool continuesNext: root.words.length > index + 1
+                        && root.words[index + 1].continues === true
+
+                    // A joiner only does something between letters that join
+                    // (Arabic and its relatives). In any other script it is an
+                    // invisible glyph the font has to borrow from a fallback,
+                    // whose larger metrics grow the line box and push the
+                    // syllable down - so it is left out there.
+                    property bool joins: /[\u0600-\u06FF\u0700-\u08FF\u1800-\u18AF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(modelData.text)
 
                     color: root.baseColor
                     // Rebuilt from the animated pixelSize so the glyphs are
@@ -121,7 +144,9 @@ Item {
                         pixelSize: root.textFont.pixelSize
                     })
                     lineHeight: 1.0
-                    text: modelData ? modelData.text : ""
+                    text: (continues && joins ? "\u200D" : "")
+                        + modelData.text
+                        + (continuesNext && joins ? "\u200D" : "")
                     width: Math.min(flow.width, implicitWidth)
                     wrapMode: Text.WrapAnywhere
                 }
@@ -222,38 +247,44 @@ Item {
         return x0 + (x1 - x0) * f;
     }
 
-    // Normalised [start, end] reading position of word `index`.
+    // Normalised [start, end] reading position of fragment `index`.
     function wordSpan(index) {
         var count = root.wordCount;
         if (count === 0)
             return [0, 0];
         var total = root.readingWidth;
-        var spacing = root.wordSpacing;
         var acc = 0;
         for (var i = 0; i < count; ++i) {
             var item = wordItems.itemAt(i);
             var w = item ? item.width : 0;
             if (i === index)
                 return [acc / total, (acc + w) / total];
-            acc += w + spacing;
+            acc += w + root.gapAfter(i);
         }
         return [0, 0];
     }
 
-    // Sum of every word's width plus the gaps between them. Read from the laid
-    // out items, so it is correct once the Flow has wrapped.
+    // Word gap after fragment `index`: none when the next fragment continues
+    // the same word, so syllables share the word's pixels with no space.
+    function gapAfter(index) {
+        if (index + 1 >= root.wordCount)
+            return 0;
+        var next = wordItems.itemAt(index + 1);
+        return next && next.continues ? 0 : root.wordSpacing;
+    }
+
+    // Sum of every fragment's width plus the word gaps between them. Read from
+    // the laid out items, so it is correct once WordFlow has wrapped.
     function computeReadingWidth() {
         var count = root.wordCount;
         if (count === 0)
             return 1;
-        var spacing = root.wordSpacing;
         var sum = 0;
         for (var i = 0; i < count; ++i) {
             var item = wordItems.itemAt(i);
-            sum += item ? item.width : 0;
+            sum += (item ? item.width : 0) + root.gapAfter(i);
         }
-        var total = sum + spacing * (count - 1);
-        return total > 0 ? total : 1;
+        return sum > 0 ? sum : 1;
     }
 
     // Maps playback time to a position along the reading order, interpolating
@@ -271,7 +302,6 @@ Item {
         var total = root.readingWidth;
         if (total <= 0)
             return 0;
-        var spacing = root.wordSpacing;
         var prevT = lineStart;
         var prevR = 0;
         var acc = 0;
@@ -287,14 +317,14 @@ Item {
             var r0 = acc;
             var r1 = acc + w;
 
-            if (t <= word.start)          // in the gap before this word
+            if (t <= word.start)          // in the gap before this fragment
                 return lerp(prevT, prevR / total, word.start, r0 / total, t);
-            if (t <= word.end)            // inside this word
+            if (t <= word.end)            // inside this fragment
                 return lerp(word.start, r0 / total, word.end, r1 / total, t);
 
             prevT = word.end;
             prevR = r1;
-            acc += w + spacing;
+            acc += w + root.gapAfter(i);
         }
 
         // Past the last word: sweep the remainder of the line.
