@@ -14,11 +14,7 @@ namespace lyrics {
 
 namespace {
 
-// Bumped whenever the layout below changes: a document written by another
-// version of this code is not read, and the file it came from is read again.
-constexpr int JsonVersion = 1;
-
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------
 // Writing. Keys are always written, even when empty, so a document that reads
 // back is byte for byte the one that was stored.
 // ---------------------------------------------------------------------------

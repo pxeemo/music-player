@@ -428,7 +428,7 @@ QStringList audioNameFilters()
             "*.OPUS", "*.m4a", "*.M4A",  "*.wav",  "*.WAV", "*.aac", "*.AAC"};
 }
 
-void loadTrack(const QString &path, Song *song, LibraryCache *cache)
+void loadTrack(const QString &path, Song *song, LibraryCache *cache, bool refresh)
 {
     if (!song)
         return;
@@ -447,23 +447,22 @@ void loadTrack(const QString &path, Song *song, LibraryCache *cache)
         sidecar.isEmpty() ? -1 : QFileInfo(sidecar).lastModified().toMSecsSinceEpoch();
 
     // A row that still fits is the whole load: no TagLib, no cover extraction,
-    // no lyric file read.
-    if (cache && cache->isOpen()) {
+    // no lyric file read. The lyrics themselves are only stashed as JSON and
+    // parsed when the view asks for them.
+    if (cache && !refresh && cache->isOpen()) {
         CachedTrack cached;
         if (cache->lookup(path, &cached) && isFresh(cached, mtimeMs, sizeBytes, sidecarMtimeMs) &&
             cachedCoverExists(cached.artwork)) {
-            if (std::optional<lyrics::Lyrics> lyrics = lyrics::fromJson(cached.lyrics)) {
-                song->setTitle(cached.title);
-                song->setArtist(cached.artist);
-                song->setAlbum(cached.album);
-                song->setDuration(cached.duration);
-                song->setArtworkSource(QUrl(cached.artwork));
-                song->setModifiedTime(QDateTime::fromMSecsSinceEpoch(cached.mtimeMs));
-                song->setAddedTime(QDateTime::fromMSecsSinceEpoch(cached.addedMs));
-                song->setLyricsDocument(std::move(*lyrics));
-                cache->touch(path);
-                return;
-            }
+            song->setTitle(cached.title);
+            song->setArtist(cached.artist);
+            song->setAlbum(cached.album);
+            song->setDuration(cached.duration);
+            song->setArtworkSource(QUrl(cached.artwork));
+            song->setModifiedTime(QDateTime::fromMSecsSinceEpoch(cached.mtimeMs));
+            song->setAddedTime(QDateTime::fromMSecsSinceEpoch(cached.addedMs));
+            song->setLyricsJson(cached.lyrics);
+            cache->touch(path);
+            return;
         }
     }
 

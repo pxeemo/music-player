@@ -1,12 +1,52 @@
 #include "song.h"
 
+#include "lyrics/lyricsserializer.h"
+
 #include <utility>
 
-Song::Song(QObject *parent) : QObject(parent), m_document(new LyricsDocument(this)) {}
+Song::Song(QObject *parent) : QObject(parent) {}
+
+void Song::applyPending()
+{
+    if (!m_document)
+        m_document = new LyricsDocument(this);
+
+    if (!m_pendingJson.isEmpty()) {
+        const QByteArray json = std::move(m_pendingJson);
+        m_pendingJson = QByteArray();
+        if (std::optional<lyrics::Lyrics> parsed = lyrics::fromJson(json))
+            m_document->setLyrics(std::move(*parsed));
+        else
+            emit lyricsSourceBroken(); // the library re-reads the file
+        return;
+    }
+    if (m_pendingFromLyrics) {
+        m_pendingFromLyrics = false;
+        m_document->setLyrics(std::move(m_pendingLyrics));
+    }
+}
+
+LyricsDocument *Song::document()
+{
+    applyPending();
+    return m_document;
+}
 
 void Song::setLyricsDocument(lyrics::Lyrics &&document)
 {
-    m_document->setLyrics(std::move(document));
+    m_pendingJson = QByteArray();
+    m_pendingLyrics = std::move(document);
+    m_pendingFromLyrics = true;
+    if (m_document)
+        applyPending(); // already showing: publish the new rows at once
+}
+
+void Song::setLyricsJson(const QByteArray &json)
+{
+    m_pendingJson = json;
+    m_pendingFromLyrics = false;
+    if (m_document)
+        applyPending();
 }
 
 void Song::setFilePath(const QString &path)

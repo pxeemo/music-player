@@ -1,5 +1,7 @@
 #include "librarycache.h"
 
+#include "lyrics/lyricsserializer.h"
+
 #include <QDir>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -8,12 +10,20 @@ namespace library {
 
 namespace {
 
-// Bumped whenever the songs table changes shape: a database written by another
-// schema is dropped and rebuilt from the files themselves.
-constexpr int SchemaVersion = 1;
+// Bumped whenever the songs table changes shape: a database written by
+// another schema is dropped and rebuilt from the files themselves.
+constexpr int TableVersion = 2;
+
+// Rows store lyrics::toJson() output, so a change to that layout makes them
+// unreadable just as surely as a table change does; both feed user_version.
+constexpr int SchemaVersion = TableVersion * 1000 + lyrics::JsonVersion;
 
 // One connection for the process; the cache lives as long as the library does.
 constexpr const char *ConnectionName = "karaoke-library";
+
+// SQLite caps the number of bound variables per statement; deletes are issued
+// in chunks well below any limit.
+constexpr qsizetype MaxBind = 500;
 
 bool exec(QSqlDatabase &db, const QString &sql)
 {
@@ -80,12 +90,7 @@ LibraryCache::LibraryCache()
                                                    "  added_ms INTEGER NOT NULL,"
                                                    "  sidecar TEXT NOT NULL,"
                                                    "  sidecar_mtime_ms INTEGER NOT NULL,"
-                                                   "  lyrics BLOB,"
-                                                   "  epoch INTEGER NOT NULL"
-                                                   ")")) &&
-                         exec(m_db, QStringLiteral("CREATE TABLE IF NOT EXISTS meta ("
-                                                   "  key TEXT PRIMARY KEY,"
-                                                   "  value TEXT NOT NULL"
+                                                   "  lyrics BLOB"
                                                    ")"));
     if (!created) {
         close();
@@ -109,32 +114,46 @@ bool LibraryCache::isOpen() const
     return m_db.isOpen();
 }
 
-bool LibraryCache::lookup(const QString &path, CachedTrack *track) const
+bool LibraryCache::lookup(const QString &path, CachedTrack *track)
 {
     if (!m_db.isOpen() || !track)
         return false;
+    if (!m_loaded)
+        preload();
+
+    const auto it = m_rows.constFind(path);
+    if (it == m_rows.cend())
+        return false;
+    *track = it.value();
+    m_visited.insert(path);
+    return true;
+}
+
+void LibraryCache::preload()
+{
+    m_rows.clear();
+    m_loaded = true;
 
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral(
-        "SELECT mtime_ms, size_bytes, title, artist, album, duration, artwork, added_ms,"
-        "       sidecar, sidecar_mtime_ms, lyrics"
-        "  FROM songs WHERE path = ?"));
-    query.addBindValue(path);
-    if (!query.exec() || !query.next())
-        return false;
+    if (!query.exec(QStringLiteral(
+            "SELECT path, mtime_ms, size_bytes, title, artist, album, duration, artwork, added_ms,"
+            "       sidecar, sidecar_mtime_ms, lyrics FROM songs")))
+        return;
 
-    track->mtimeMs = query.value(0).toLongLong();
-    track->sizeBytes = query.value(1).toLongLong();
-    track->title = query.value(2).toString();
-    track->artist = query.value(3).toString();
-    track->album = query.value(4).toString();
-    track->duration = query.value(5).toDouble();
-    track->artwork = query.value(6).toString();
-    track->addedMs = query.value(7).toLongLong();
-    track->sidecar = query.value(8).toString();
-    track->sidecarMtimeMs = query.value(9).toLongLong();
-    track->lyrics = query.value(10).toByteArray();
-    return true;
+    while (query.next()) {
+        CachedTrack &track = m_rows[query.value(0).toString()];
+        track.mtimeMs = query.value(1).toLongLong();
+        track.sizeBytes = query.value(2).toLongLong();
+        track.title = query.value(3).toString();
+        track.artist = query.value(4).toString();
+        track.album = query.value(5).toString();
+        track.duration = query.value(6).toDouble();
+        track.artwork = query.value(7).toString();
+        track.addedMs = query.value(8).toLongLong();
+        track.sidecar = query.value(9).toString();
+        track.sidecarMtimeMs = query.value(10).toLongLong();
+        track.lyrics = query.value(11).toByteArray();
+    }
 }
 
 void LibraryCache::save(const QString &path, const CachedTrack &track)
@@ -146,8 +165,8 @@ void LibraryCache::save(const QString &path, const CachedTrack &track)
     query.prepare(QStringLiteral(
         "INSERT OR REPLACE INTO songs"
         " (path, mtime_ms, size_bytes, title, artist, album, duration, artwork, added_ms,"
-        "  sidecar, sidecar_mtime_ms, lyrics, epoch)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+        "  sidecar, sidecar_mtime_ms, lyrics)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
     query.addBindValue(path);
     query.addBindValue(track.mtimeMs);
     query.addBindValue(track.sizeBytes);
@@ -160,47 +179,60 @@ void LibraryCache::save(const QString &path, const CachedTrack &track)
     query.addBindValue(text(track.sidecar));
     query.addBindValue(track.sidecarMtimeMs);
     query.addBindValue(track.lyrics);
-    query.addBindValue(m_epoch);
     query.exec(); // a failed write costs the next scan the reuse, nothing more
+    m_rows.insert(path, track);
+    m_visited.insert(path); // written this scan, so the sweep keeps it
 }
 
 void LibraryCache::touch(const QString &path)
 {
     if (!m_db.isOpen())
         return;
-
-    QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("UPDATE songs SET epoch = ? WHERE path = ?"));
-    query.addBindValue(m_epoch);
-    query.addBindValue(path);
-    query.exec();
+    m_visited.insert(path);
 }
 
 void LibraryCache::beginScan()
 {
-    m_epoch = 0;
-    if (!m_db.isOpen())
-        return;
-
-    QSqlQuery query(m_db);
-    if (query.exec(QStringLiteral("SELECT value FROM meta WHERE key = 'epoch'")) && query.next())
-        m_epoch = query.value(0).toInt();
-
-    ++m_epoch;
-    query.prepare(QStringLiteral("INSERT OR REPLACE INTO meta (key, value) VALUES ('epoch', ?)"));
-    query.addBindValue(m_epoch);
-    query.exec();
+    m_rows.clear();
+    m_visited.clear();
+    m_loaded = false; // the next lookup reads the table as it is now
 }
 
 void LibraryCache::endScan()
 {
-    if (!m_db.isOpen() || m_epoch <= 0)
+    if (!m_db.isOpen()) {
+        m_rows.clear();
+        m_visited.clear();
         return;
+    }
+    if (!m_loaded)
+        preload(); // an emptied folder never looks anything up
 
-    QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("DELETE FROM songs WHERE epoch <> ?"));
-    query.addBindValue(m_epoch);
-    query.exec();
+    QStringList gone;
+    for (auto it = m_rows.cbegin(); it != m_rows.cend(); ++it) {
+        if (!m_visited.contains(it.key()))
+            gone.append(it.key());
+    }
+
+    if (!gone.isEmpty()) {
+        QSqlQuery query(m_db);
+        for (qsizetype offset = 0; offset < gone.size(); offset += MaxBind) {
+            const qsizetype count = qMin<qsizetype>(MaxBind, gone.size() - offset);
+            QString placeholders;
+            placeholders.reserve(int(count * 2));
+            for (qsizetype i = 0; i < count; ++i)
+                placeholders += QLatin1Char('?');
+
+            query.prepare(QStringLiteral("DELETE FROM songs WHERE path IN (%1)").arg(placeholders));
+            for (qsizetype i = 0; i < count; ++i)
+                query.addBindValue(gone[offset + i]);
+            query.exec();
+        }
+    }
+
+    m_rows.clear(); // the table is re-read on the next scan's first lookup
+    m_visited.clear();
+    m_loaded = false;
 }
 
 void LibraryCache::close()

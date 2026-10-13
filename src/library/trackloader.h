@@ -21,7 +21,10 @@ QStringList audioNameFilters();
 
 /// Fills `song` from the file at `path`: tags, duration, artwork and lyrics.
 /// Never throws; missing pieces are simply left empty. When `cache` still holds
-/// the file, everything comes from the row instead of from the file itself.
-void loadTrack(const QString &path, Song *song, LibraryCache *cache = nullptr);
+/// the file, everything comes from the row instead of from the file itself -
+/// except with `refresh`, which reads the file again and replaces the row, for
+/// a cache entry that turned out to be unreadable.
+void loadTrack(const QString &path, Song *song, LibraryCache *cache = nullptr,
+               bool refresh = false);
 
 } // namespace library

@@ -150,6 +150,10 @@ void MusicLibrary::processChunk()
     while (!m_pending.isEmpty() && processed < chunkSize) {
         const QString path = m_pending.takeFirst();
         auto *song = new Song(this);
+        // Queued, so a broken cached document is re-read after the current
+        // binding has finished, never inside it.
+        connect(song, &Song::lyricsSourceBroken, this, &MusicLibrary::refreshSong,
+                Qt::QueuedConnection);
         library::loadTrack(path, song, &m_cache);
         m_songs.append(song);
         ++m_scanned;
@@ -171,6 +175,16 @@ void MusicLibrary::processChunk()
         m_scanning = false;
         emit scanningChanged();
     }
+}
+
+void MusicLibrary::refreshSong()
+{
+    auto *song = qobject_cast<Song *>(sender());
+    if (!song || !m_songs.contains(song))
+        return;
+    // Past the cache: the row itself is what failed to read, so the file is
+    // read again and the row replaced.
+    library::loadTrack(song->filePath(), song, &m_cache, /*refresh=*/true);
 }
 
 void MusicLibrary::rebuildView()

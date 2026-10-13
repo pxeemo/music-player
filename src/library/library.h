@@ -89,6 +89,9 @@ class MusicLibrary : public QObject {
   private:
     void processChunk();
     void rebuildView();
+    /// Re-reads a song whose cached lyrics did not read back (see
+    /// `Song::lyricsSourceBroken`), replacing the broken row.
+    void refreshSong();
 
     static MusicLibrary *s_instance;
 

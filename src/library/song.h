@@ -8,6 +8,7 @@
 #include "lyrics/lyrics.h"
 #include "lyrics/lyricsdocument.h"
 
+#include <QByteArray>
 #include <QColor>
 #include <QDateTime>
 #include <QObject>
@@ -29,7 +30,10 @@ class Song : public QObject {
     Q_PROPERTY(QUrl artworkSource READ artworkSource NOTIFY artworkChanged)
     Q_PROPERTY(QColor colorA READ colorA NOTIFY colorsChanged)
     Q_PROPERTY(QColor colorB READ colorB NOTIFY colorsChanged)
-    /// The structured lyrics, already flattened for the view. Never null.
+    /// The structured lyrics, flattened on first access. Never null: a scan
+    /// only records where the lyrics came from (a parse of the file, or the
+    /// cached JSON), and the rows are built when the view asks - which in
+    /// practice means for the song being played, not for all ~1200 at once.
     Q_PROPERTY(LyricsDocument *document READ document CONSTANT)
 
   public:
@@ -48,7 +52,8 @@ class Song : public QObject {
     QDateTime modifiedTime() const { return m_modifiedTime; }
     QDateTime addedTime() const { return m_addedTime; }
 
-    LyricsDocument *document() const { return m_document; }
+    /// Built on first access (see the `document` property).
+    LyricsDocument *document();
 
     // Deterministic cover colours derived from the track, so the fallback
     // artwork stays stable without needing an embedded picture.
@@ -63,8 +68,12 @@ class Song : public QObject {
     void setArtworkSource(const QUrl &source);
     void setModifiedTime(const QDateTime &time) { m_modifiedTime = time; }
     void setAddedTime(const QDateTime &time) { m_addedTime = time; }
-    /// Hands a parsed document to the UI.
+    /// Hands a parsed document to the UI. Built at once when the document is
+    /// already showing, otherwise on first access.
     void setLyricsDocument(lyrics::Lyrics &&document);
+    /// Hands the cached JSON form of the lyrics; parsed and built on first
+    /// access, so a scan pays nothing for documents nobody has looked at.
+    void setLyricsJson(const QByteArray &json);
 
   signals:
     void filePathChanged();
@@ -74,8 +83,14 @@ class Song : public QObject {
     void durationChanged();
     void artworkChanged();
     void colorsChanged();
+    /// The cached JSON would not read back (a broken row). The library
+    /// re-reads the file, so the row is repaired instead of staying bad.
+    void lyricsSourceBroken();
 
   private:
+    /// Creates the document if needed and builds whatever source is stashed.
+    void applyPending();
+
     QString m_filePath;
     QString m_title;
     QString m_artist;
@@ -85,4 +100,7 @@ class Song : public QObject {
     QDateTime m_modifiedTime;
     QDateTime m_addedTime;
     LyricsDocument *m_document = nullptr;
+    lyrics::Lyrics m_pendingLyrics;   ///< parsed, not yet flattened
+    bool m_pendingFromLyrics = false; ///< true when m_pendingLyrics is the source
+    QByteArray m_pendingJson;         ///< cached JSON, not yet parsed
 };

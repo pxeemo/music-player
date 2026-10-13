@@ -18,6 +18,12 @@
 
 namespace lyrics {
 
+/// The layout `toJson()` writes; a reader refuses any other version. The
+/// library cache folds this into its schema version, so raising it (as must
+/// happen whenever the layout changes) makes every stored row be read from its
+/// source file again on the next scan.
+inline constexpr int JsonVersion = 1;
+
 /// The document as compact JSON.
 QByteArray toJson(const Lyrics &document);
 

@@ -9,8 +9,10 @@
 // A row is used only while the audio file, its sidecar lyric file (when there
 // is one) and its extracted cover are still exactly what the row was written
 // from; anything else falls back to reading the file, and the row is rewritten.
-// Rows for files that disappeared are dropped when the scan ends, which is why
-// beginScan()/endScan() bracket it.
+// Rows for files that disappeared are dropped when the scan ends: beginScan()
+// clears the visited set, every hit and every write marks its row as present,
+// and endScan() deletes whatever was not marked - so a warm scan issues no
+// per-row SQL beyond the one preload.
 //
 // The tables carry `PRAGMA user_version`: a database written by a different
 // schema is dropped and rebuilt, never migrated. Every call is a no-op when the
@@ -18,6 +20,8 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QString>
 
@@ -53,22 +57,28 @@ class LibraryCache {
     /// False when SQLite or the data directory is unavailable.
     bool isOpen() const;
 
-    /// Reads the row for `path`; false when there is none.
-    bool lookup(const QString &path, CachedTrack *track) const;
+    /// Reads the row for `path`; false when there is none. The whole table is
+    /// read on the first call - one query instead of one per file - and held
+    /// until the scan ends. A hit counts as a visit.
+    bool lookup(const QString &path, CachedTrack *track);
     void save(const QString &path, const CachedTrack &track);
-    /// Marks a row as still present, so the sweep at the end of a scan keeps it.
+    /// Marks a row as still present, so the sweep at the end of the scan keeps
+    /// it. No SQL: the sweep works from the visited set alone.
     void touch(const QString &path);
 
-    /// Before a scan: the epoch rows are tagged with. After it: everything not
-    /// touched by this scan is deleted, which is how removed files leave.
+    /// Before a scan: forgets what was seen. After it: deletes every row that
+    /// was not seen, which is how removed files leave.
     void beginScan();
     void endScan();
 
   private:
     void close();
+    void preload();
 
     QSqlDatabase m_db;
-    int m_epoch = 0;
+    QHash<QString, CachedTrack> m_rows; ///< every row, read once per scan
+    QSet<QString> m_visited;            ///< rows seen by this scan
+    bool m_loaded = false;
 };
 
 } // namespace library
