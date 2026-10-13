@@ -1,7 +1,9 @@
 #include "trackloader.h"
 
 #include "lyrics/lrcparser.h"
+#include "lyrics/lyricsserializer.h"
 #include "lyrics/ttmlparser.h"
+#include "librarycache.h"
 #include "song.h"
 
 #include <QBuffer>
@@ -410,6 +412,14 @@ lyrics::Lyrics buildDocument(const QString &raw, bool isTtml, bool isLrc, const 
     return document;
 }
 
+// A cached cover lives in the artwork cache, not next to the song: once that
+// file is gone the row is stale, because the cover is only worth extracting
+// from the audio file again.
+bool cachedCoverExists(const QString &artwork)
+{
+    return artwork.isEmpty() || QFile::exists(QUrl(artwork).toLocalFile());
+}
+
 } // namespace
 
 QStringList audioNameFilters()
@@ -418,15 +428,47 @@ QStringList audioNameFilters()
             "*.OPUS", "*.m4a", "*.M4A",  "*.wav",  "*.WAV", "*.aac", "*.AAC"};
 }
 
-void loadTrack(const QString &path, Song *song)
+void loadTrack(const QString &path, Song *song, LibraryCache *cache)
 {
     if (!song)
         return;
-    silenceTagLibOnce();
 
     song->setFilePath(path);
 
     const QFileInfo info(path);
+    const QString sidecar = sidecarPath(path);
+
+    // The stamps that decide whether a cached row still describes this file.
+    // The sidecar counts as well as the audio: editing an .lrc by hand has to
+    // be noticed even though the song itself did not change.
+    const qint64 mtimeMs = info.lastModified().toMSecsSinceEpoch();
+    const qint64 sizeBytes = info.size();
+    const qint64 sidecarMtimeMs =
+        sidecar.isEmpty() ? -1 : QFileInfo(sidecar).lastModified().toMSecsSinceEpoch();
+
+    // A row that still fits is the whole load: no TagLib, no cover extraction,
+    // no lyric file read.
+    if (cache && cache->isOpen()) {
+        CachedTrack cached;
+        if (cache->lookup(path, &cached) && isFresh(cached, mtimeMs, sizeBytes, sidecarMtimeMs) &&
+            cachedCoverExists(cached.artwork)) {
+            if (std::optional<lyrics::Lyrics> lyrics = lyrics::fromJson(cached.lyrics)) {
+                song->setTitle(cached.title);
+                song->setArtist(cached.artist);
+                song->setAlbum(cached.album);
+                song->setDuration(cached.duration);
+                song->setArtworkSource(QUrl(cached.artwork));
+                song->setModifiedTime(QDateTime::fromMSecsSinceEpoch(cached.mtimeMs));
+                song->setAddedTime(QDateTime::fromMSecsSinceEpoch(cached.addedMs));
+                song->setLyricsDocument(std::move(*lyrics));
+                cache->touch(path);
+                return;
+            }
+        }
+    }
+
+    silenceTagLibOnce();
+
     TagLib::FileRef ref(QFile::encodeName(path).constData());
 
     QString title;
@@ -465,7 +507,6 @@ void loadTrack(const QString &path, Song *song)
     bool isTtml = looksLikeTtml(embedded);
     bool isLrc = !isTtml && lyrics::LrcParser::looksLikeLrc(embedded);
 
-    const QString sidecar = sidecarPath(path);
     if (!sidecar.isEmpty()) {
         QFile file(sidecar);
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -495,7 +536,27 @@ void loadTrack(const QString &path, Song *song)
         added = info.lastModified();
     song->setAddedTime(added);
 
-    song->setLyricsDocument(buildDocument(rawLyrics, isTtml, isLrc, title, artist));
+    lyrics::Lyrics document = buildDocument(rawLyrics, isTtml, isLrc, title, artist);
+
+    // Everything just learned goes back into the cache, so the next scan can
+    // stop after comparing stamps.
+    if (cache && cache->isOpen()) {
+        CachedTrack cached;
+        cached.mtimeMs = mtimeMs;
+        cached.sizeBytes = sizeBytes;
+        cached.title = title;
+        cached.artist = artist;
+        cached.album = album;
+        cached.duration = duration;
+        cached.artwork = artwork.toString();
+        cached.addedMs = added.toMSecsSinceEpoch();
+        cached.sidecar = sidecar;
+        cached.sidecarMtimeMs = sidecarMtimeMs;
+        cached.lyrics = lyrics::toJson(document);
+        cache->save(path, cached);
+    }
+
+    song->setLyricsDocument(std::move(document));
 }
 
 } // namespace library

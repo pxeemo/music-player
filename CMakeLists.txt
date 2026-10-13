@@ -12,6 +12,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Quick
     Qml
     ShaderTools
+    Sql
 )
 
 find_package(PkgConfig REQUIRED)
@@ -74,6 +75,8 @@ qt_add_qml_module(karaoke
         src/lyrics/lrcparser.cpp
         src/lyrics/ttmlparser.h
         src/lyrics/ttmlparser.cpp
+        src/lyrics/lyricsserializer.h
+        src/lyrics/lyricsserializer.cpp
         src/lyrics/lyricsdocument.h
         src/lyrics/lyricsdocument.cpp
 
@@ -82,6 +85,8 @@ qt_add_qml_module(karaoke
         src/library/song.cpp
         src/library/library.h
         src/library/library.cpp
+        src/library/librarycache.h
+        src/library/librarycache.cpp
         src/library/trackloader.h
         src/library/trackloader.cpp
 
@@ -101,6 +106,7 @@ target_include_directories(karaoke
 target_link_libraries(karaoke PRIVATE
     Qt6::Quick
     Qt6::Qml
+    Qt6::Sql
     PkgConfig::GST
     PkgConfig::TAGLIB
 )

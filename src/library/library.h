@@ -4,9 +4,15 @@
 // filtered, sorted view over it, so the UI and the play queue always agree on
 // the visible order. Scanning runs off the event loop a chunk at a time.
 // Reading a single file's tags/cover/lyrics is library::loadTrack()'s job.
+//
+// A scan does not re-read what it has already read: loadTrack() is handed the
+// SQLite cache, which returns a file's row while the file is still the one that
+// row was written from, and beginScan()/endScan() drop the rows of files that
+// have gone away.
 
 #pragma once
 
+#include "librarycache.h"
 #include "song.h"
 
 #include <QList>
@@ -93,6 +99,7 @@ class MusicLibrary : public QObject {
     QStringList m_pending;
     QString m_folder;
     QTimer m_timer;
+    library::LibraryCache m_cache; // rows still valid from the last scan
     int m_scanned = 0;
     int m_total = 0;
     bool m_scanning = false;

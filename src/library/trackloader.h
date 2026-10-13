@@ -14,11 +14,14 @@ class Song;
 
 namespace library {
 
+class LibraryCache;
+
 /// Name filters for the audio formats the scanner picks up.
 QStringList audioNameFilters();
 
 /// Fills `song` from the file at `path`: tags, duration, artwork and lyrics.
-/// Never throws; missing pieces are simply left empty.
-void loadTrack(const QString &path, Song *song);
+/// Never throws; missing pieces are simply left empty. When `cache` still holds
+/// the file, everything comes from the row instead of from the file itself.
+void loadTrack(const QString &path, Song *song, LibraryCache *cache = nullptr);
 
 } // namespace library

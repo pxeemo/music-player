@@ -127,10 +127,14 @@ void MusicLibrary::scan()
 
     m_total = m_pending.size();
     m_scanning = true;
+    // Rows the scan does not touch are dropped when it ends, which is how
+    // files that were deleted or moved leave the cache.
+    m_cache.beginScan();
     emit progressChanged();
     emit scanningChanged();
 
     if (m_pending.isEmpty()) {
+        m_cache.endScan();
         m_scanning = false;
         emit scanningChanged();
         return;
@@ -146,7 +150,7 @@ void MusicLibrary::processChunk()
     while (!m_pending.isEmpty() && processed < chunkSize) {
         const QString path = m_pending.takeFirst();
         auto *song = new Song(this);
-        library::loadTrack(path, song);
+        library::loadTrack(path, song, &m_cache);
         m_songs.append(song);
         ++m_scanned;
         ++processed;
@@ -163,6 +167,7 @@ void MusicLibrary::processChunk()
 
     if (finished) {
         m_timer.stop();
+        m_cache.endScan();
         m_scanning = false;
         emit scanningChanged();
     }
